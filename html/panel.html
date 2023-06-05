@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    body {
+      background-color: grey;
+      background-attachment: fixed;
+      background-position: center;
+      background-repeat: no-repeat;
+      height: 100%;
+      background-color: rgb(36, 42, 49);
+      margin: 0;
+    }
+
+    h1 {
+      text-align: center;
+      color: wheat;
+      font-family: 'Ubuntu', sans-serif;
+      font-weight: bolder;
+      font-size: 1em;
+      vertical-align: middle;
+    }
+
+    #id,
+    #command {
+      border: 2px solid rgb(196, 196, 194);
+      border-radius: 5px;
+      padding: 2px;
+      font-family: 'Ubuntu', sans-serif;
+      background-color: rgb(47, 55, 64);
+      color: wheat;
+    }
+
+    #logs:focus {
+      outline: none !important;
+    }
+
+    #id:focus,
+    #command:focus {
+      font-size: 1rem;
+      border: 2px solid rgb(237, 237, 233);
+      outline: none !important;
+    }
+
+    #id {
+      font-size: 0.5rem;
+    }
+
+    #command {
+      font-size: 1rem;
+      margin: 5px 0px 5px 0px;
+    }
+
+    #command,
+    #logs {
+      display: block;
+      width: 900px;
+      box-sizing: border-box;
+    }
+
+    #logs {
+      border-radius: 5px;
+      background-repeat: no-repeat;
+      height: 400px;
+      background-color: rgb(47, 55, 64);
+      border: 2px solid rgb(196, 196, 194);
+      overflow: scroll;
+      font-family: Ubuntu, sans-serif;
+      color: wheat;
+      font-size: 0.7rem;
+      padding: 2px;
+      letter-spacing: 1px;
+      line-height: 7px;
+    }
+
+    .center {
+      display: flex;
+      justify-content: center;
+    }
+
+    .vert {
+      align-items: center;
+    }
+  </style>
+  <title>panel</title>
+</head>
+
+<body>
+  <div class="center">
+    <div class="vert">
+      <div id="logs" cols="30" rows="10" readonly></div>
+      <input id="command" type="text" placeholder="js killall" disabled="true">
+      <input id="id" type="password" placeholder="password">
+    </div>
+  </div>
+  <script>
+    const input = document.querySelector("#command")
+    const textarea = document.querySelector("#logs")
+    const id = document.querySelector("#id")
+    let text = ""
+
+    function tex(t) {
+      text = t
+      render()
+    }
+    let w, h = 0
+    textarea.onmousedown = function (e) {
+      w = e.offsetWidth;
+      h = e.offsetHeight;
+    }
+    textarea.onmouseup = function (e) {
+      if (e.offsetWidth === w && e.offsetHeight === h) {
+        return
+      }
+      render()
+    }
+
+    id.onkeydown = function (e) {
+      if (e.key == "Enter") {
+        if (text != "") {
+          tex("connecting")
+        }
+        id.disabled = true
+        input.disabled = false
+        const websocket = new WebSocket("ws://localhost:4001/connect/" + id.value)
+
+        websocket.onopen = function () {
+          console.log("connection opened")
+          tex("")
+        }
+
+        websocket.onclose = function () {
+          console.log("connection closed");
+          id.disabled = false
+          input.disabled = true
+          tex("disconnected")
+        }
+
+        websocket.onmessage = function (e) {
+          console.log("< " + e.data)
+          tex(text + e.data + "<br></br>")
+        }
+
+        input.onkeydown = function (e) {
+          if (e.key == "Enter") {
+            console.log("> " + input.value)
+            websocket.send(input.value)
+            input.value = ""
+          }
+        }
+      }
+    }
+
+    function render() {
+      //       let data = `
+      // <svg xmlns="http://www.w3.org/2000/svg" width="${textarea.offsetWidth}" height="${textarea.offsetHeight}">
+      // <foreignObject width="100%" height="100%">
+      // <div xmlns="http://www.w3.org/1999/xhtml" 
+      // style="font-family:Ubuntu, sans-serif;color:wheat;font-size:1rem;padding:2px;letter-spacing:1px">
+      // ${text}
+      // </div>
+      // </foreignObject>
+      // </svg>`
+      //       textarea.style.backgroundImage = "url(" +
+      //         URL.createObjectURL(new Blob([data], { type: 'image/svg+xml' }))
+      //         + ")"
+      textarea.innerHTML = text
+      textarea.scrollTop = textarea.scrollHeight
+    }
+
+  </script>
+
+</body>
+
+</html>
