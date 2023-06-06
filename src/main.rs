@@ -6,6 +6,8 @@ use std::str::FromStr;
 mod logging;
 mod process;
 mod server;
+mod webhook;
+mod websocket;
 
 use process::*;
 use server::*;
@@ -15,7 +17,7 @@ use std::net::SocketAddr;
 async fn main() {
     let process = Process::spawn(
         std::env::var("SERVER_DIR")
-            .unwrap_or("~/mserv".replace("~", &std::env::var("HOME").unwrap_or("/root".into())))
+            .unwrap_or("~/mserv".replace('~', &std::env::var("HOME").unwrap_or("/root".into())))
             .into(),
     );
     Server::spawn(

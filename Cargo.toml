@@ -24,4 +24,11 @@ tokio = { version = "1.28.2", features = [
   "rt-multi-thread",
   "process",
 ] }
+webhook = "2.1.2"
 tokio-stream = "0.1.14"
+futures-util = "0.3.28"
+strip-ansi-escapes = "0.1.1"
+
+[profile.release]
+lto = true
+strip = true
