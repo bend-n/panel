@@ -1,40 +1,27 @@
 use ansi_to_html::convert_escaped;
-use std::process::Stdio;
 use std::sync::Arc;
-use std::{ffi::OsString, time::Duration};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::task::JoinHandle;
 
 use crate::server::State;
 pub struct Process {
-    _inner: Child,
+    inner: TcpStream,
     input: Option<broadcast::Receiver<String>>,
     html_output: Option<broadcast::Sender<String>>,
     plain_output: Option<broadcast::Sender<String>>,
-    stdout: BufReader<ChildStdout>,
-    stdin: ChildStdin,
 }
 
 impl Process {
     /// spawns the server
     #[must_use]
-    pub fn spawn(server_dir: OsString) -> Self {
-        let mut p = Command::new("bash")
-            .arg("run.sh")
-            .current_dir(server_dir)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("failed to spawn");
-
+    pub async fn spawn() -> Self {
+        let stream = TcpStream::connect("localhost:6859").await.unwrap();
         Self {
-            // mindus doesnt output stderr
-            stdout: BufReader::new(p.stdout.take().unwrap()),
-            stdin: p.stdin.take().unwrap(),
-            _inner: p,
+            inner: stream,
             input: None,
             html_output: None,
             plain_output: None,
@@ -82,14 +69,14 @@ impl Process {
                     Ok(mut s) => {
                         input!("{s}");
                         s += "\n";
-                        self.stdin.write_all(s.as_bytes()).await.unwrap();
-                        self.stdin.flush().await.unwrap();
+                        self.inner.write_all(s.as_bytes()).await.unwrap();
+                        self.inner.flush().await.unwrap();
                     }
                 }
 
                 let string = {
                     let n = tokio::select! {
-                        n = {self.stdout.read(&mut stdout)} => n.unwrap(),
+                        n = {self.inner.read(&mut stdout)} => n.unwrap(),
                         _ = async_std::task::sleep(Duration::from_millis(500)) => continue,
                     };
                     String::from_utf8_lossy(&stdout[..n]).into_owned()

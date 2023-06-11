@@ -15,11 +15,7 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
-    let process = Process::spawn(
-        std::env::var("SERVER_DIR")
-            .unwrap_or("~/mserv".replace('~', &std::env::var("HOME").unwrap_or("/root".into())))
-            .into(),
-    );
+    let process = Process::spawn().await;
     Server::spawn(
         SocketAddr::from((
             [0, 0, 0, 0],
