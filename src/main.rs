@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 #[macro_use]
 mod logging;
+mod bot;
 mod process;
 mod server;
 mod webhook;

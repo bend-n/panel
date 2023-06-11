@@ -1,7 +1,6 @@
+use crate::bot::Bot;
+use crate::process::Process;
 use crate::websocket::WebSocket;
-use crate::{process::Process, webhook::Webhook};
-use axum::http::StatusCode;
-use axum::response::{Redirect, Response};
 use axum::{
     extract::{
         ws::{Message, WebSocketUpgrade},
@@ -15,7 +14,6 @@ use axum::{
 use futures::sink::SinkExt;
 use minify_html::{minify, Cfg};
 use paste::paste;
-use std::sync::Mutex;
 use std::{
     net::SocketAddr,
     sync::{Arc, OnceLock},
@@ -86,7 +84,6 @@ impl Server {
             .route("/plaguess.png", png!(plaguess))
             .route("/favicon.ico", png!(logo32))
             .route("/connect/:id", get(connect_ws))
-            .route("/hook/*k", get(connect_wh))
             .with_state(state.clone());
         let mut server_handle = tokio::spawn(async move {
             AxumServer::bind(&addr)
@@ -95,6 +92,7 @@ impl Server {
                 .unwrap()
         });
         let mut process_handle = proc.input(stdin).with_state(&state).link();
+        Bot::new(state.stdout_plain.subscribe(), state.stdin.clone()).await;
         tokio::select! {
             _ = (&mut server_handle) => process_handle.abort(),
             _ = (&mut process_handle) => server_handle.abort(),
@@ -135,24 +133,4 @@ async fn connect_ws(
         }
         WebSocket::new(socket, state).await.wait().await;
     })
-}
-
-async fn connect_wh(StateW(state): StateW<Arc<State>>, Path(params): Path<String>) -> Response {
-    static WEBHOOK: Mutex<Option<Webhook>> = Mutex::new(None); //one slot
-    let (id, url) = {
-        match params.split_once('/') {
-            None => return StatusCode::BAD_REQUEST.into_response(),
-            Some((a, b)) => (a, b),
-        }
-    };
-    if !matches(id) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    if let Some(w) = WEBHOOK.lock().unwrap().as_ref() {
-        if w.running() {
-            return StatusCode::LOCKED.into_response();
-        }
-    }
-    *WEBHOOK.lock().unwrap() = Some(Webhook::new(state.stdout_plain.subscribe(), url).await);
-    Redirect::to("/panel").into_response()
 }

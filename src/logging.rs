@@ -35,7 +35,6 @@ macro_rules! define_print {
     ($prefix:expr) => {
         define_print!(fail, concat!($prefix, " ", "!!"), break);
         define_print!(flush, concat!($prefix, " ", "<<"));
-        define_print!(nooutput, concat!($prefix, " ", "!>"));
         define_print!(input, concat!($prefix, " ", "<"));
         define_print!(output, concat!($prefix, " ", ">"));
     };

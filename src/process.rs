@@ -93,7 +93,6 @@ impl Process {
                 if html_output.receiver_count() > 0 {
                     html_output.send(ansi2html(&string)).unwrap();
                 }
-                nooutput!();
                 async_std::task::sleep(Duration::from_millis(500)).await;
             }
         })
