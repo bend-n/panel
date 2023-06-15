@@ -27,6 +27,7 @@ impl<'a> Webhook<'a> {
         for<'b> F: FnOnce(&'b mut ExecuteWebhook<'a>) -> &'b mut ExecuteWebhook<'a>,
     {
         let mut execute_webhook = ExecuteWebhook::default();
+        execute_webhook.allowed_mentions(|m| m.empty_parse());
         block(&mut execute_webhook);
 
         let map = json::hashmap_to_json_map(execute_webhook.0);

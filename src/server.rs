@@ -92,7 +92,7 @@ impl Server {
                 .unwrap()
         });
         let mut process_handle = proc.input(stdin).with_state(&state).link();
-        Bot::new(state.stdout_plain.subscribe(), state.stdin.clone()).await;
+        Bot::spawn(state.stdout_plain.subscribe(), state.stdin.clone()).await;
         tokio::select! {
             _ = (&mut server_handle) => process_handle.abort(),
             _ = (&mut process_handle) => server_handle.abort(),

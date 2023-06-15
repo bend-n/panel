@@ -1,35 +1,62 @@
+mod maps;
+mod player;
+
 use crate::webhook::Webhook;
 use anyhow::Result;
-use futures_util::StreamExt;
+use maps::Maps;
 use minify_js::TopLevelMode;
+use player::Players;
 use regex::Regex;
 use serenity::http::Http;
 use serenity::prelude::*;
 use std::fs::read_to_string;
 use std::sync::{Arc, Mutex, OnceLock};
-use strum::{AsRefStr, EnumString, EnumVariantNames, VariantNames};
 use tokio::sync::broadcast;
-use tokio::sync::OnceCell as TokLock;
+
 pub struct Data {
     stdin: broadcast::Sender<String>,
 }
 
 static SKIPPING: OnceLock<(Arc<Mutex<u8>>, broadcast::Sender<String>)> = OnceLock::new();
 
+#[macro_export]
+macro_rules! send {
+    ($e:expr, $fmt:literal $(, $args:expr)* $(,)?) => {
+        $e.send(format!($fmt $(, $args)*))
+    };
+}
+
+macro_rules! send_ctx {
+    ($e:expr,$fmt:literal $(, $args:expr)* $(,)?) => {
+        $e.data().stdin.send(format!($fmt $(, $args)*))
+    };
+}
+
 pub struct Bot;
 impl Bot {
-    pub async fn new(stdout: broadcast::Receiver<String>, stdin: broadcast::Sender<String>) {
+    pub async fn spawn(stdout: broadcast::Receiver<String>, stdin: broadcast::Sender<String>) {
         let tok = std::env::var("TOKEN").unwrap_or(read_to_string("token").expect("wher token"));
         let f: poise::FrameworkBuilder<Data, anyhow::Error> = poise::Framework::builder()
             .options(poise::FrameworkOptions {
-                commands: vec![raw(), say(), ban(), js(), maps(), start(), end(), help()],
+                commands: vec![
+                    raw(),
+                    say(),
+                    ban(),
+                    unban(),
+                    js(),
+                    maps(),
+                    players(),
+                    start(),
+                    end(),
+                    help(),
+                ],
                 prefix_options: poise::PrefixFrameworkOptions {
                     prefix: Some(">".to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
             })
-            .token(&tok)
+            .token(tok)
             .intents(GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT)
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
@@ -56,7 +83,7 @@ type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 #[poise::command(
     prefix_command,
     required_permissions = "USE_SLASH_COMMANDS",
-    category = "ADMINISTRATION"
+    category = "Control"
 )]
 /// send a raw command to the server
 async fn raw(
@@ -65,7 +92,7 @@ async fn raw(
     #[rest]
     cmd: String,
 ) -> Result<()> {
-    ctx.data().stdin.send(cmd)?;
+    send_ctx!(ctx, "{cmd}")?;
     println!("sent");
     Ok(())
 }
@@ -90,49 +117,49 @@ async fn get_nextblock() -> String {
         .unwrap_or("._?".to_string())
 }
 
-#[poise::command(slash_command, category = "ADMINISTRATION")]
+#[poise::command(slash_command, category = "Control")]
 /// say something as the server
 async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Result<()> {
-    let _ = ctx.defer();
+    let _ = ctx.defer().await;
     ctx.data().stdin.send(format!("say {message}"))?;
     return_next!(ctx)
 }
 
-#[derive(EnumString, EnumVariantNames, AsRefStr)]
-#[strum(serialize_all = "snake_case")]
-enum BanType {
-    Id,
-    Ip,
-    Name,
-}
-
-async fn autocomplete_ban<'a>(
-    _ctx: Context<'_>,
-    partial: &'a str,
-) -> impl futures::Stream<Item = String> + 'a {
-    futures::stream::iter(BanType::VARIANTS)
-        .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
-}
-
-#[poise::command(slash_command, category = "ADMINISTRATION")]
-/// ban a player
+#[poise::command(slash_command, category = "Control")]
+/// ban a player by uuid and ip
 async fn ban(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_ban"] ban_type: BanType,
-    #[description = "Player (id/ip/name)"] player: String,
+    #[description = "player to ban"]
+    #[autocomplete = "player::autocomplete"]
+    player: String,
 ) -> Result<()> {
-    let _ = ctx.defer();
-    ctx.data()
-        .stdin
-        .send(format!("ban {} {player}", ban_type.as_ref()))?;
+    let _ = ctx.defer().await;
+    let player = Players::find(&ctx.data().stdin, player)
+        .await
+        .unwrap()
+        .unwrap();
+    send_ctx!(ctx, "ban ip {}", player.ip)?;
+    send_ctx!(ctx, "ban id {}", player.uuid)?;
+    return_next!(ctx)
+}
+
+#[poise::command(slash_command, category = "Control")]
+/// unban a player by uuid or ip
+async fn unban(
+    ctx: Context<'_>,
+    #[description = "Player id/ip"]
+    #[rename = "ip_or_id"]
+    player: String,
+) -> Result<()> {
+    let _ = ctx.defer().await;
+    send_ctx!(ctx, "unban {}", player)?;
     return_next!(ctx)
 }
 
 #[poise::command(
     prefix_command,
     required_permissions = "USE_SLASH_COMMANDS",
-    category = "ADMINISTRATION",
+    category = "Control",
     track_edits
 )]
 /// run arbitrary javascript
@@ -150,12 +177,12 @@ async fn js(
         .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`js...\`\`\`."#))?;
     let script = mat.get(2).unwrap().as_str();
     let mut out = vec![];
-    let script = if let Err(_) = minify_js::minify(TopLevelMode::Global, script.into(), &mut out) {
+    let script = if minify_js::minify(TopLevelMode::Global, script.into(), &mut out).is_err() {
         std::borrow::Cow::from(script.replace('\n', ";")) // xd
     } else {
         String::from_utf8_lossy(&out)
     };
-    ctx.data().stdin.send(format!("js {script}"))?;
+    send_ctx!(ctx, "js {script}")?;
     let line = get_nextblock().await;
     ctx.send(|m| m.content(line)).await?;
     Ok(())
@@ -177,81 +204,92 @@ fn strip_colors(from: &str) -> String {
     result
 }
 
-static MAPS: TokLock<Vec<String>> = TokLock::const_new();
-async fn get_maps(stdin: &broadcast::Sender<String>) -> &Vec<String> {
-    MAPS.get_or_init(|| async move {
-        stdin.send(format!("listmaps")).unwrap();
-        let res = get_nextblock().await;
-        let mut vec = vec![];
-        for line in res.lines() {
-            if let Some((_, name)) = line.split_once(':') {
-                vec.push(strip_colors(name));
-            }
-        }
-        vec
-    })
-    .await
-}
-
-#[poise::command(slash_command, required_permissions = "USE_SLASH_COMMANDS")]
+#[poise::command(
+    slash_command,
+    required_permissions = "USE_SLASH_COMMANDS",
+    category = "Control"
+)]
 /// lists the maps.
 pub async fn maps(ctx: Context<'_>) -> Result<()> {
-    let _ = ctx.defer();
-    let maps = get_maps(&ctx.data().stdin).await;
+    let _ = ctx.defer().await;
+    let maps = Maps::get_all(&ctx.data().stdin).await;
     poise::send_reply(ctx, |m| {
         m.embed(|e| {
             for (k, v) in maps.iter().enumerate() {
                 e.field((k + 1).to_string(), v, true);
             }
-            e.description("map list.")
+            e.description("map list.").color((34, 139, 34))
         })
     })
     .await?;
     Ok(())
 }
 
-async fn autocomplete_map<'a>(
-    ctx: Context<'a>,
-    partial: &'a str,
-) -> impl futures::Stream<Item = String> + 'a {
-    futures::stream::iter(get_maps(&ctx.data().stdin).await)
-        .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
+#[poise::command(
+    slash_command,
+    required_permissions = "USE_SLASH_COMMANDS",
+    category = "Control"
+)]
+/// lists the currently online players.
+pub async fn players(ctx: Context<'_>) -> Result<()> {
+    let _ = ctx.defer().await;
+    let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
+    poise::send_reply(ctx, |m| {
+        m.embed(|e| {
+            if players.is_empty() {
+                return e.title("no players online.").color((255, 69, 0));
+            }
+            e.fields(players.into_iter().map(|p| {
+                (
+                    p.name,
+                    format!("{id}, {ip}", id = p.uuid, ip = p.ip)
+                        + if p.admin { " [A]" } else { "" },
+                    true,
+                )
+            }));
+            e.description("currently online players.")
+                .color((255, 165, 0))
+        })
+    })
+    .await?;
+    Ok(())
 }
 
-async fn mapi(map: &str, stdin: &broadcast::Sender<String>) -> usize {
-    get_maps(stdin).await.iter().position(|r| r == map).unwrap()
-}
-
-#[poise::command(slash_command, required_permissions = "USE_SLASH_COMMANDS")]
+#[poise::command(
+    slash_command,
+    required_permissions = "USE_SLASH_COMMANDS",
+    category = "Control"
+)]
 /// start the game.
 pub async fn start(
     ctx: Context<'_>,
     #[description = "the map"]
-    #[autocomplete = "autocomplete_map"]
+    #[autocomplete = "maps::autocomplete"]
     map: String,
 ) -> Result<()> {
-    let _ = ctx.defer();
-    ctx.data()
-        .stdin
-        .send(format!("plague {}", mapi(&map, &ctx.data().stdin).await))
-        .unwrap();
+    let _ = ctx.defer().await;
+    send_ctx!(ctx, "host {}", Maps::find(&map, &ctx.data().stdin).await)?;
     return_next!(ctx)
 }
 
-#[poise::command(slash_command, required_permissions = "USE_SLASH_COMMANDS")]
+#[poise::command(
+    slash_command,
+    category = "Control",
+    required_permissions = "USE_SLASH_COMMANDS"
+)]
 /// end the game.
 pub async fn end(
     ctx: Context<'_>,
     #[description = "the map to go to"]
-    #[autocomplete = "autocomplete_map"]
+    #[autocomplete = "maps::autocomplete"]
     map: String,
 ) -> Result<()> {
-    let _ = ctx.defer();
-    ctx.data()
-        .stdin
-        .send(format!("endplague {}", mapi(&map, &ctx.data().stdin).await))
-        .unwrap();
+    let _ = ctx.defer().await;
+    send_ctx!(
+        ctx,
+        "gameover {}",
+        Maps::find(&map, &ctx.data().stdin).await
+    )?;
     return_next!(ctx)
 }
 

@@ -39,11 +39,6 @@ serenity = { version = "0.11.5", features = [
 ], default-features = false }
 poise = "0.5.5"
 anyhow = "1.0.71"
-strum = { version = "0.24.1", features = [
-  "strum_macros",
-  "derive",
-  "std",
-], default-features = false }
 regex = { version = "1.8.4", features = ["std"], default-features = false }
 minify-js = "0.4.3"
 
