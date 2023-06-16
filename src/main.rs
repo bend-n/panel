@@ -1,4 +1,4 @@
-#![feature(utf8_chunks)]
+#![feature(lazy_cell)]
 
 use std::str::FromStr;
 

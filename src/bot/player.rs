@@ -2,6 +2,7 @@ use super::{get_nextblock, strip_colors, Context};
 use crate::send;
 use anyhow::Result;
 use futures_util::StreamExt;
+use itertools::Itertools;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -58,17 +59,15 @@ async fn get_players(stdin: &broadcast::Sender<String>) -> Result<Vec<Player>> {
         } else if line.is_empty() {
             continue;
         }
-        let split = line.split('/').collect::<Vec<&str>>();
-        if split.len() != 3 {
-            continue;
-        }
-        if let Some((admin, name)) = split[0].split_once(' ') {
-            players.push(Player {
-                admin: admin == "[A]",
-                name: strip_colors(name),
-                uuid: split[1].to_owned(),
-                ip: Ipv4Addr::from_str(split[2]).unwrap(),
-            })
+        if let Some((first, uuid, ip)) = line.split('/').collect_tuple() {
+            if let Some((admin, name)) = first.split_once(' ') {
+                players.push(Player {
+                    admin: admin == "[A]",
+                    name: strip_colors(name),
+                    uuid: uuid.to_owned(),
+                    ip: Ipv4Addr::from_str(ip).unwrap(),
+                })
+            }
         }
     }
     Ok(players)

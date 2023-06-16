@@ -2,15 +2,17 @@ mod maps;
 mod player;
 
 use crate::webhook::Webhook;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use maps::Maps;
 use minify_js::TopLevelMode;
 use player::Players;
 use regex::Regex;
-use serenity::http::Http;
+use serenity::http::{CacheHttp, Http};
 use serenity::prelude::*;
 use std::fs::read_to_string;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::str::FromStr;
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use tokio::sync::broadcast;
 
 pub struct Data {
@@ -32,6 +34,14 @@ macro_rules! send_ctx {
     };
 }
 
+#[cfg(not(debug_assertions))]
+const PFX: &'static str = ">";
+#[cfg(debug_assertions)]
+const PFX: &'static str = "-";
+
+const SUCCESS: (u8, u8, u8) = (34, 139, 34);
+const FAIL: (u8, u8, u8) = (255, 69, 0);
+
 pub struct Bot;
 impl Bot {
     pub async fn spawn(stdout: broadcast::Receiver<String>, stdin: broadcast::Sender<String>) {
@@ -43,15 +53,21 @@ impl Bot {
                     say(),
                     ban(),
                     unban(),
+                    add_admin(),
+                    remove_admin(),
                     js(),
                     maps(),
                     players(),
+                    status(),
                     start(),
                     end(),
                     help(),
                 ],
                 prefix_options: poise::PrefixFrameworkOptions {
-                    prefix: Some(">".to_string()),
+                    edit_tracker: Some(poise::EditTracker::for_timespan(
+                        std::time::Duration::from_secs(2 * 60),
+                    )),
+                    prefix: Some(PFX.to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -169,10 +185,10 @@ async fn js(
     #[rest]
     script: String,
 ) -> Result<()> {
-    static RE: OnceLock<Regex> = OnceLock::new();
+    static RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"```(js|javascript)?([^`]+)```"#).unwrap());
     let _ = ctx.channel_id().start_typing(&ctx.serenity_context().http);
-    let re = RE.get_or_init(|| Regex::new(r#"```(js|javascript)?([^`]+)```"#).unwrap());
-    let mat = re
+    let mat = RE
         .captures(&script)
         .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`js...\`\`\`."#))?;
     let script = mat.get(2).unwrap().as_str();
@@ -207,7 +223,7 @@ fn strip_colors(from: &str) -> String {
 #[poise::command(
     slash_command,
     required_permissions = "USE_SLASH_COMMANDS",
-    category = "Control"
+    category = "Info"
 )]
 /// lists the maps.
 pub async fn maps(ctx: Context<'_>) -> Result<()> {
@@ -218,37 +234,78 @@ pub async fn maps(ctx: Context<'_>) -> Result<()> {
             for (k, v) in maps.iter().enumerate() {
                 e.field((k + 1).to_string(), v, true);
             }
-            e.description("map list.").color((34, 139, 34))
+            e.description("map list.").color(SUCCESS)
         })
     })
     .await?;
     Ok(())
 }
 
-#[poise::command(
-    slash_command,
-    required_permissions = "USE_SLASH_COMMANDS",
-    category = "Control"
-)]
+#[poise::command(prefix_command, slash_command, category = "Info")]
+/// server status.
+pub async fn status(ctx: Context<'_>) -> Result<()> {
+    let _ = ctx.defer_or_broadcast().await;
+    send_ctx!(ctx, "status")?;
+    let block = tokio::select! {
+        block = get_nextblock() => block,
+        _ = async_std::task::sleep(std::time::Duration::from_secs(5)) =>
+            { poise::send_reply(ctx, |m| m.embed(|e| e.title("server down").color(FAIL))).await?; return Ok(()) },
+    };
+    let (tps, mem, pcount) = block
+        .split('/')
+        .map(|s| u32::from_str(s.trim().split_once(' ').unwrap().0).unwrap())
+        .collect_tuple()
+        .ok_or(anyhow!("couldnt split block"))?;
+    poise::send_reply(ctx, |m| {
+        m.embed(|e| {
+            if pcount > 0 {
+                e.footer(|f| f.text("see /players for player list"));
+            }
+            e.title("server online")
+                .field("tps", tps, true)
+                .field("memory use", mem, true)
+                .field("players", pcount, true)
+                .color(SUCCESS)
+        })
+    })
+    .await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, category = "Info")]
 /// lists the currently online players.
 pub async fn players(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer().await;
     let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
+    let perms = ctx
+        .partial_guild()
+        .await
+        .unwrap()
+        .member_permissions(ctx.http(), ctx.author().id)
+        .await?;
+    // let perms = ctx
+    //     .author_member()
+    //     .await
+    //     .ok_or(anyhow!("couldnt get perms"))?
+    //     .permissions(ctx.cache().unwrap())?;
     poise::send_reply(ctx, |m| {
         m.embed(|e| {
             if players.is_empty() {
-                return e.title("no players online.").color((255, 69, 0));
+                return e.title("no players online.").color(FAIL);
             }
             e.fields(players.into_iter().map(|p| {
+                let admins = if p.admin { " [A]" } else { "" };
                 (
                     p.name,
-                    format!("{id}, {ip}", id = p.uuid, ip = p.ip)
-                        + if p.admin { " [A]" } else { "" },
+                    if perms.use_slash_commands() {
+                        format!("{id}, {ip}", id = p.uuid, ip = p.ip) + admins
+                    } else {
+                        admins.to_string()
+                    },
                     true,
                 )
             }));
-            e.description("currently online players.")
-                .color((255, 165, 0))
+            e.description("currently online players.").color(SUCCESS)
         })
     })
     .await?;
@@ -293,11 +350,44 @@ pub async fn end(
     return_next!(ctx)
 }
 
+#[poise::command(slash_command, category = "Configuration")]
+/// make somebody a admin
+pub async fn add_admin(
+    ctx: Context<'_>,
+    #[description = "The player to make admin"]
+    #[autocomplete = "player::autocomplete"]
+    player: String,
+) -> Result<()> {
+    let player = Players::find(&ctx.data().stdin, player)
+        .await
+        .unwrap()
+        .unwrap();
+    send_ctx!(ctx, "admin add {}", player.uuid)?;
+    Ok(())
+}
+
+#[poise::command(slash_command, category = "Configuration")]
+/// remove the admin status
+pub async fn remove_admin(
+    ctx: Context<'_>,
+    #[description = "The player to remove admin status from"]
+    #[autocomplete = "player::autocomplete"]
+    player: String,
+) -> Result<()> {
+    let player = Players::find(&ctx.data().stdin, player)
+        .await
+        .unwrap()
+        .unwrap();
+    send_ctx!(ctx, "admin remove {}", player.uuid)?;
+    Ok(())
+}
+
 #[poise::command(
     prefix_command,
     slash_command,
     required_permissions = "USE_SLASH_COMMANDS",
-    track_edits
+    track_edits,
+    category = "Info"
 )]
 /// show help and stuff
 pub async fn help(

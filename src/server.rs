@@ -12,12 +12,7 @@ use axum::{
     Router, Server as AxumServer,
 };
 use futures::sink::SinkExt;
-use minify_html::{minify, Cfg};
-use paste::paste;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, OnceLock},
-};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::broadcast;
 
 pub struct State {
@@ -42,21 +37,14 @@ impl State {
 
 macro_rules! html {
     ($file:expr) => {
-        get(paste!(
-            || async {
-                static [<$file:upper>]: OnceLock<Vec<u8>> = OnceLock::new();
-                Html(from_utf8([<$file:upper>].get_or_init(|| {
-                    minify(
-                        include_bytes!(concat!("../html/", stringify!($file), ".html")),
-                        &Cfg {
-                            minify_js: true,
-                            minify_css: true,
-                            ..Default::default()
-                        },
-                    )
-                })).replace("ws://localhost:4001/connect/", &format!("{}", std::env::var("URL").unwrap_or("ws://localhost:4001/connect/".to_string()))))
-            }
-        ))
+        get(|| async {
+            let ret: Html<&'static [u8]> = Html(include_bytes!(concat!(
+                "../html/",
+                stringify!($file),
+                ".html"
+            )));
+            ret
+        })
     };
 }
 
@@ -101,21 +89,6 @@ impl Server {
     }
 }
 
-/// like [String::from_utf8_lossy] but instead of being lossy it panics
-pub fn from_utf8(v: &[u8]) -> &str {
-    let mut iter = std::str::Utf8Chunks::new(v);
-    if let Some(chunk) = iter.next() {
-        let valid = chunk.valid();
-        if chunk.invalid().is_empty() {
-            debug_assert_eq!(valid.len(), v.len());
-            return valid;
-        }
-    } else {
-        return "";
-    };
-    unreachable!("invalid utf8")
-}
-
 fn matches(id: &str) -> bool {
     std::env::var("ID").as_deref().unwrap_or("4") == id
 }
@@ -131,6 +104,6 @@ async fn connect_ws(
             let _ = s.send(Message::Text("correct id".to_string())).await;
             return;
         }
-        WebSocket::new(socket, state).await.wait().await;
+        tokio::spawn(WebSocket::spawn(socket, state));
     })
 }

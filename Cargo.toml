@@ -13,9 +13,8 @@ axum = { version = "0.6.18", features = [
   "tokio",
   "http1",
   "matched-path",
-] }
+], default-features = false }
 futures = "0.3.28"
-minify-html = "0.11.1"
 paste = "1.0.12"
 tokio = { version = "1.28.2", features = [
   "macros",
@@ -24,24 +23,26 @@ tokio = { version = "1.28.2", features = [
   "rt-multi-thread",
   "process",
   "parking_lot",
-] }
+], default-features = false }
 tokio-stream = "0.1.14"
 futures-util = "0.3.28"
 strip-ansi-escapes = "0.1.1"
 serenity = { version = "0.11.5", features = [
   "builder",
   "client",
-  # "framework",
   "utils",
   "rustls_backend",
   "gateway",
-  # "standard_framework",
 ], default-features = false }
 poise = "0.5.5"
 anyhow = "1.0.71"
 regex = { version = "1.8.4", features = ["std"], default-features = false }
 minify-js = "0.4.3"
+itertools = "0.10.5"
 
 [profile.release]
 lto = true
 strip = true
+
+[build-dependencies]
+minify-html = "0.11.1"

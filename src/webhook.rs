@@ -1,7 +1,9 @@
+use itertools::Itertools;
 use poise::serenity_prelude::Webhook as RealHook;
+use regex::Regex;
 use serenity::{builder::ExecuteWebhook, http::Http, json};
 use std::convert::AsRef;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, error::TryRecvError};
 
@@ -154,40 +156,52 @@ macro_rules! s {
         $line.starts_with($e)
     };
 }
+
+macro_rules! tern {
+    ($predicate:expr, $true: expr, $false: expr) => {{
+        if $predicate {
+            $true
+        } else {
+            $false
+        }
+    }};
+}
 pub struct MindustryStyle;
 impl OutputStyle for MindustryStyle {
     fn split(line: &str) -> Option<(String, String)> {
-        if s!(line, [' ', '\t']) || s!(line, "at") {
+        if s!(line, [' ', '\t']) || s!(line, "at") || s!(line, "Lost command socket connection") {
             return None;
         }
-        if line.chars().filter(|x| x == &':').count() == 1 {
-            if let Some((u, c)) = line.split_once(':') {
-                let u = unify(u).trim_start_matches('<').trim().to_owned();
-                let c = unify(c).trim_end_matches('>').trim().to_owned();
-                if !(u.is_empty() || c.is_empty()) {
-                    return Some((u, c));
-                }
+
+        if let Some((u, c)) = line.split(": ").map(|s| unify(s)).collect_tuple() {
+            let u = u.trim_start_matches('<');
+            let c = c.trim_end_matches('>');
+            if !(u.is_empty() || c.is_empty()) {
+                return Some((u.to_owned(), c.to_owned()));
             }
         }
-        if let Some(index) = line.find("has") {
-            if line.contains("connected") {
-                let player = &line[..index];
-                let prefix = if line.contains("disconnected") {
-                    "left"
-                } else {
-                    "joined"
-                };
-                return Some((unify(player).trim().to_owned(), prefix.to_owned()));
-            }
+
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r#"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]+==)\]"#).unwrap()
+        });
+        if let Some(captures) = REGEX.captures(line) {
+            let player = unify(captures.get(1).unwrap().as_str());
+            let prefix = tern!(captures.get(2).is_some(), "left", "joined");
+            let uuid = captures.get(3).unwrap().as_str();
+            return Some((player, format!("{prefix} ({uuid})")));
         }
         None
     }
 }
 
-/// latin > extended a > kill
 fn unify(s: &str) -> String {
     s.chars()
-        .map(|c| if (c as u32) < 384 { c } else { ' ' })
+        .filter_map(|c| {
+            if c > 'џ' {
+                return None;
+            }
+            Some(c)
+        })
         .collect()
 }
 
@@ -237,6 +251,14 @@ fn style() {
     //named
     test_line!("abc: hi", "abc", "hi");
     test_line!("<a: /help>", "a", "/help");
-    test_line!("a has connected. [abc==]", "a", "joined");
-    test_line!("a has disconnected. [abc==] (closed)", "a", "left");
+    test_line!("a has connected. [abc==]", "a", "joined (abc==)");
+    test_line!("a has disconnected. [abc==] (closed)", "a", "left (abc==)");
+    test_line!("a: :o", "a", ":o");
+    test_line!("a:b: :o", "a:b", ":o");
+}
+
+#[test]
+fn test_unify() {
+    assert!(unify("grassྱྊၔ") == "grass");
+    assert!(unify("иди к черту") == "иди к черту")
 }
