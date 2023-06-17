@@ -1,8 +1,9 @@
-use super::{get_nextblock, strip_colors, Context};
+use super::{get_nextblock, strip_colors, Context, FAIL, SUCCESS};
 use crate::send;
 use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
+use serenity::http::CacheHttp;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -81,4 +82,39 @@ pub async fn autocomplete<'a>(
     futures::stream::iter(x)
         .filter(move |p| futures::future::ready(p.name.starts_with(partial)))
         .map(|p| p.name)
+}
+
+#[poise::command(slash_command, prefix_command, category = "Info", rename = "players")]
+/// lists the currently online players.
+pub async fn list(ctx: Context<'_>) -> Result<()> {
+    let _ = ctx.defer().await;
+    let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
+    let perms = ctx
+        .partial_guild()
+        .await
+        .unwrap()
+        .member_permissions(ctx.http(), ctx.author().id)
+        .await?;
+    poise::send_reply(ctx, |m| {
+        m.embed(|e| {
+            if players.is_empty() {
+                return e.title("no players online.").color(FAIL);
+            }
+            e.fields(players.into_iter().map(|p| {
+                let admins = if p.admin { " [A]" } else { "" };
+                (
+                    p.name,
+                    if perms.use_slash_commands() {
+                        format!("{id}, {ip}", id = p.uuid, ip = p.ip) + admins
+                    } else {
+                        admins.to_string()
+                    },
+                    true,
+                )
+            }));
+            e.description("currently online players.").color(SUCCESS)
+        })
+    })
+    .await?;
+    Ok(())
 }

@@ -1,4 +1,4 @@
-use super::{get_nextblock, strip_colors, Context};
+use super::{get_nextblock, strip_colors, Context, Result, SUCCESS};
 use crate::send;
 use futures_util::StreamExt;
 use tokio::sync::broadcast;
@@ -38,4 +38,27 @@ pub async fn autocomplete<'a>(
     futures::stream::iter(Maps::get_all(&ctx.data().stdin).await)
         .filter(move |name| futures::future::ready(name.starts_with(partial)))
         .map(|name| name.to_string())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    required_permissions = "USE_SLASH_COMMANDS",
+    category = "Info",
+    rename = "maps"
+)]
+/// lists the maps.
+pub async fn list(ctx: Context<'_>) -> Result<()> {
+    let _ = ctx.defer_or_broadcast().await;
+    let maps = Maps::get_all(&ctx.data().stdin).await;
+    poise::send_reply(ctx, |m| {
+        m.embed(|e| {
+            for (k, v) in maps.iter().enumerate() {
+                e.field((k + 1).to_string(), v, true);
+            }
+            e.description("map list.").color(SUCCESS)
+        })
+    })
+    .await?;
+    Ok(())
 }

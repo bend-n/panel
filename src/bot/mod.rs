@@ -1,18 +1,19 @@
+mod admin;
+mod bans;
+mod config;
+mod js;
 mod maps;
 mod player;
+mod status;
 
 use crate::webhook::Webhook;
-use anyhow::{anyhow, Result};
-use itertools::Itertools;
+use anyhow::Result;
 use maps::Maps;
-use minify_js::TopLevelMode;
-use player::Players;
-use regex::Regex;
-use serenity::http::{CacheHttp, Http};
+
+use serenity::http::Http;
 use serenity::prelude::*;
 use std::fs::read_to_string;
-use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::broadcast;
 
 pub struct Data {
@@ -28,6 +29,7 @@ macro_rules! send {
     };
 }
 
+#[macro_export]
 macro_rules! send_ctx {
     ($e:expr,$fmt:literal $(, $args:expr)* $(,)?) => {
         $e.data().stdin.send(format!($fmt $(, $args)*))
@@ -51,14 +53,15 @@ impl Bot {
                 commands: vec![
                     raw(),
                     say(),
-                    ban(),
-                    unban(),
-                    add_admin(),
-                    remove_admin(),
-                    js(),
-                    maps(),
-                    players(),
-                    status(),
+                    bans::add(),
+                    bans::remove(),
+                    admin::add(),
+                    admin::remove(),
+                    js::run(),
+                    maps::list(),
+                    player::list(),
+                    status::command(),
+                    config::set(),
                     start(),
                     end(),
                     help(),
@@ -99,7 +102,8 @@ type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 #[poise::command(
     prefix_command,
     required_permissions = "USE_SLASH_COMMANDS",
-    category = "Control"
+    category = "Control",
+    track_edits
 )]
 /// send a raw command to the server
 async fn raw(
@@ -109,15 +113,15 @@ async fn raw(
     cmd: String,
 ) -> Result<()> {
     send_ctx!(ctx, "{cmd}")?;
-    println!("sent");
     Ok(())
 }
 
+#[macro_export]
 macro_rules! return_next {
     ($ctx:expr) => {{
-        let line = get_nextblock().await;
+        let line = crate::bot::get_nextblock().await;
         $ctx.send(|m| m.content(line)).await?;
-        Ok(())
+        return Ok(());
     }};
 }
 
@@ -141,69 +145,6 @@ async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Re
     return_next!(ctx)
 }
 
-#[poise::command(slash_command, category = "Control")]
-/// ban a player by uuid and ip
-async fn ban(
-    ctx: Context<'_>,
-    #[description = "player to ban"]
-    #[autocomplete = "player::autocomplete"]
-    player: String,
-) -> Result<()> {
-    let _ = ctx.defer().await;
-    let player = Players::find(&ctx.data().stdin, player)
-        .await
-        .unwrap()
-        .unwrap();
-    send_ctx!(ctx, "ban ip {}", player.ip)?;
-    send_ctx!(ctx, "ban id {}", player.uuid)?;
-    return_next!(ctx)
-}
-
-#[poise::command(slash_command, category = "Control")]
-/// unban a player by uuid or ip
-async fn unban(
-    ctx: Context<'_>,
-    #[description = "Player id/ip"]
-    #[rename = "ip_or_id"]
-    player: String,
-) -> Result<()> {
-    let _ = ctx.defer().await;
-    send_ctx!(ctx, "unban {}", player)?;
-    return_next!(ctx)
-}
-
-#[poise::command(
-    prefix_command,
-    required_permissions = "USE_SLASH_COMMANDS",
-    category = "Control",
-    track_edits
-)]
-/// run arbitrary javascript
-async fn js(
-    ctx: Context<'_>,
-    #[description = "Script"]
-    #[rest]
-    script: String,
-) -> Result<()> {
-    static RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"```(js|javascript)?([^`]+)```"#).unwrap());
-    let _ = ctx.channel_id().start_typing(&ctx.serenity_context().http);
-    let mat = RE
-        .captures(&script)
-        .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`js...\`\`\`."#))?;
-    let script = mat.get(2).unwrap().as_str();
-    let mut out = vec![];
-    let script = if minify_js::minify(TopLevelMode::Global, script.into(), &mut out).is_err() {
-        std::borrow::Cow::from(script.replace('\n', ";")) // xd
-    } else {
-        String::from_utf8_lossy(&out)
-    };
-    send_ctx!(ctx, "js {script}")?;
-    let line = get_nextblock().await;
-    ctx.send(|m| m.content(line)).await?;
-    Ok(())
-}
-
 fn strip_colors(from: &str) -> String {
     let mut result = String::new();
     result.reserve(from.len());
@@ -218,98 +159,6 @@ fn strip_colors(from: &str) -> String {
         }
     }
     result
-}
-
-#[poise::command(
-    slash_command,
-    required_permissions = "USE_SLASH_COMMANDS",
-    category = "Info"
-)]
-/// lists the maps.
-pub async fn maps(ctx: Context<'_>) -> Result<()> {
-    let _ = ctx.defer().await;
-    let maps = Maps::get_all(&ctx.data().stdin).await;
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            for (k, v) in maps.iter().enumerate() {
-                e.field((k + 1).to_string(), v, true);
-            }
-            e.description("map list.").color(SUCCESS)
-        })
-    })
-    .await?;
-    Ok(())
-}
-
-#[poise::command(prefix_command, slash_command, category = "Info")]
-/// server status.
-pub async fn status(ctx: Context<'_>) -> Result<()> {
-    let _ = ctx.defer_or_broadcast().await;
-    send_ctx!(ctx, "status")?;
-    let block = tokio::select! {
-        block = get_nextblock() => block,
-        _ = async_std::task::sleep(std::time::Duration::from_secs(5)) =>
-            { poise::send_reply(ctx, |m| m.embed(|e| e.title("server down").color(FAIL))).await?; return Ok(()) },
-    };
-    let (tps, mem, pcount) = block
-        .split('/')
-        .map(|s| u32::from_str(s.trim().split_once(' ').unwrap().0).unwrap())
-        .collect_tuple()
-        .ok_or(anyhow!("couldnt split block"))?;
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            if pcount > 0 {
-                e.footer(|f| f.text("see /players for player list"));
-            }
-            e.title("server online")
-                .field("tps", tps, true)
-                .field("memory use", mem, true)
-                .field("players", pcount, true)
-                .color(SUCCESS)
-        })
-    })
-    .await?;
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command, category = "Info")]
-/// lists the currently online players.
-pub async fn players(ctx: Context<'_>) -> Result<()> {
-    let _ = ctx.defer().await;
-    let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
-    let perms = ctx
-        .partial_guild()
-        .await
-        .unwrap()
-        .member_permissions(ctx.http(), ctx.author().id)
-        .await?;
-    // let perms = ctx
-    //     .author_member()
-    //     .await
-    //     .ok_or(anyhow!("couldnt get perms"))?
-    //     .permissions(ctx.cache().unwrap())?;
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            if players.is_empty() {
-                return e.title("no players online.").color(FAIL);
-            }
-            e.fields(players.into_iter().map(|p| {
-                let admins = if p.admin { " [A]" } else { "" };
-                (
-                    p.name,
-                    if perms.use_slash_commands() {
-                        format!("{id}, {ip}", id = p.uuid, ip = p.ip) + admins
-                    } else {
-                        admins.to_string()
-                    },
-                    true,
-                )
-            }));
-            e.description("currently online players.").color(SUCCESS)
-        })
-    })
-    .await?;
-    Ok(())
 }
 
 #[poise::command(
@@ -350,49 +199,11 @@ pub async fn end(
     return_next!(ctx)
 }
 
-#[poise::command(slash_command, category = "Configuration")]
-/// make somebody a admin
-pub async fn add_admin(
-    ctx: Context<'_>,
-    #[description = "The player to make admin"]
-    #[autocomplete = "player::autocomplete"]
-    player: String,
-) -> Result<()> {
-    let player = Players::find(&ctx.data().stdin, player)
-        .await
-        .unwrap()
-        .unwrap();
-    send_ctx!(ctx, "admin add {}", player.uuid)?;
-    Ok(())
-}
-
-#[poise::command(slash_command, category = "Configuration")]
-/// remove the admin status
-pub async fn remove_admin(
-    ctx: Context<'_>,
-    #[description = "The player to remove admin status from"]
-    #[autocomplete = "player::autocomplete"]
-    player: String,
-) -> Result<()> {
-    let player = Players::find(&ctx.data().stdin, player)
-        .await
-        .unwrap()
-        .unwrap();
-    send_ctx!(ctx, "admin remove {}", player.uuid)?;
-    Ok(())
-}
-
-#[poise::command(
-    prefix_command,
-    slash_command,
-    required_permissions = "USE_SLASH_COMMANDS",
-    track_edits,
-    category = "Info"
-)]
+#[poise::command(prefix_command, slash_command, track_edits, category = "Info")]
 /// show help and stuff
 pub async fn help(
     ctx: Context<'_>,
-    #[description = "Specific command to show help about"]
+    #[description = "command to show help about"]
     #[autocomplete = "poise::builtins::autocomplete_command"]
     command: Option<String>,
 ) -> Result<()> {
