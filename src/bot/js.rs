@@ -1,6 +1,6 @@
 use super::{Context, Result};
 use crate::{return_next, send_ctx};
-use minify_js::TopLevelMode;
+use minify_js::{Session, TopLevelMode};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -13,7 +13,14 @@ fn parse_js(from: &str) -> Result<String> {
     let script = mat.get(2).unwrap().as_str();
     let mut out = vec![];
     Ok(
-        if minify_js::minify(TopLevelMode::Global, script.into(), &mut out).is_ok() {
+        if minify_js::minify(
+            &Session::new(),
+            TopLevelMode::Global,
+            script.as_bytes(),
+            &mut out,
+        )
+        .is_ok()
+        {
             String::from_utf8_lossy(&out).to_string()
         } else {
             script.replace('\n', ";")

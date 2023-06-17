@@ -9,7 +9,6 @@ mod bot;
 mod process;
 mod server;
 mod webhook;
-mod websocket;
 
 use process::*;
 use server::*;

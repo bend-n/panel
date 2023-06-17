@@ -1,3 +1,3 @@
 # panel
 
-html terminal for connecting to game servers without ssh
+links a mindustry server to discord
