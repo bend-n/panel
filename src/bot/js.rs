@@ -30,7 +30,7 @@ fn parse_js(from: &str) -> Result<String> {
 
 #[poise::command(
     prefix_command,
-    required_permissions = "USE_SLASH_COMMANDS",
+    required_permissions = "ADMINISTRATOR",
     category = "Control",
     track_edits,
     rename = "js"

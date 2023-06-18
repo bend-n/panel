@@ -104,7 +104,7 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
                 let admins = if p.admin { " [A]" } else { "" };
                 (
                     p.name,
-                    if perms.use_slash_commands() {
+                    if perms.administrator() {
                         format!("{id}, {ip}", id = p.uuid, ip = p.ip) + admins
                     } else {
                         admins.to_string()

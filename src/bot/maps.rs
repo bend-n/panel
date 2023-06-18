@@ -43,7 +43,7 @@ pub async fn autocomplete<'a>(
 #[poise::command(
     slash_command,
     prefix_command,
-    required_permissions = "USE_SLASH_COMMANDS",
+    required_permissions = "ADMINISTRATOR",
     category = "Info",
     rename = "maps"
 )]

@@ -5,6 +5,7 @@ mod js;
 mod maps;
 mod player;
 mod status;
+mod voting;
 
 use crate::webhook::Webhook;
 use anyhow::Result;
@@ -18,6 +19,7 @@ use tokio::sync::broadcast;
 
 pub struct Data {
     stdin: broadcast::Sender<String>,
+    vote_data: voting::Votes,
 }
 
 static SKIPPING: OnceLock<(Arc<Mutex<u8>>, broadcast::Sender<String>)> = OnceLock::new();
@@ -43,6 +45,7 @@ const PFX: &'static str = "-";
 
 const SUCCESS: (u8, u8, u8) = (34, 139, 34);
 const FAIL: (u8, u8, u8) = (255, 69, 0);
+const DISABLED: (u8, u8, u8) = (112, 128, 144);
 
 pub struct Bot;
 impl Bot {
@@ -62,10 +65,25 @@ impl Bot {
                     player::list(),
                     status::command(),
                     config::set(),
+                    voting::create(),
                     start(),
                     end(),
                     help(),
                 ],
+                on_error: |e| {
+                    Box::pin(async move {
+                        e.ctx()
+                            .unwrap()
+                            .send(|b| {
+                                b.embed(|e| {
+                                    e.color(FAIL)
+                                        .description("oy <@696196765564534825> i broke")
+                                })
+                            })
+                            .await
+                            .unwrap();
+                    })
+                },
                 prefix_options: poise::PrefixFrameworkOptions {
                     edit_tracker: Some(poise::EditTracker::for_timespan(
                         std::time::Duration::from_secs(2 * 60),
@@ -81,7 +99,10 @@ impl Bot {
                 Box::pin(async move {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     println!("registered");
-                    Ok(Data { stdin })
+                    Ok(Data {
+                        stdin,
+                        vote_data: voting::Votes::new(vec![]),
+                    })
                 })
             });
 
@@ -91,9 +112,7 @@ impl Bot {
             SKIPPING.get_or_init(|| (wh.skip.clone(), wh.skipped.clone()));
             wh.link(stdout).await;
         });
-        tokio::spawn(async move {
-            f.run().await.unwrap();
-        });
+        f.run().await.unwrap()
     }
 }
 
@@ -101,7 +120,7 @@ type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 
 #[poise::command(
     prefix_command,
-    required_permissions = "USE_SLASH_COMMANDS",
+    required_permissions = "ADMINISTRATOR",
     category = "Control",
     track_edits
 )]
@@ -163,7 +182,7 @@ fn strip_colors(from: &str) -> String {
 
 #[poise::command(
     slash_command,
-    required_permissions = "USE_SLASH_COMMANDS",
+    required_permissions = "ADMINISTRATOR",
     category = "Control"
 )]
 /// start the game.
@@ -181,7 +200,7 @@ pub async fn start(
 #[poise::command(
     slash_command,
     category = "Control",
-    required_permissions = "USE_SLASH_COMMANDS"
+    required_permissions = "ADMINISTRATOR"
 )]
 /// end the game.
 pub async fn end(

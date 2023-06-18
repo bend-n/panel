@@ -5,9 +5,11 @@ use itertools::Itertools;
 use std::str::FromStr;
 
 fn parse(line: &str) -> Option<(u32, u32, u32)> {
-    line.split('/')
-        .map(|s| u32::from_str(s.trim().split_once(' ').unwrap().0).unwrap())
-        .collect_tuple()
+    let mut v = vec![];
+    for piece in line.split('/') {
+        v.push(u32::from_str(piece.trim().split_once(' ')?.0).ok()?);
+    }
+    v.into_iter().collect_tuple()
 }
 
 #[allow(dead_code)]
@@ -32,7 +34,7 @@ impl Size {
 // https://git.sr.ht/~f9/human_bytes
 pub fn humanize_bytes<T: Into<Size>>(bytes: T) -> String {
     const SUFFIX: [&str; 4] = ["B", "KB", "MB", "GB"];
-    let size = dbg!(bytes.into().bytes());
+    let size = bytes.into().bytes();
 
     if size <= 0.0 {
         return "0 B".to_string();
@@ -53,13 +55,21 @@ pub fn humanize_bytes<T: Into<Size>>(bytes: T) -> String {
 pub async fn command(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
     send_ctx!(ctx, "status")?;
+    macro_rules! fail {
+        ($ctx:expr,$fail:expr) => {{
+            poise::send_reply(ctx, |m| m.embed(|e| e.title("server down").color($fail))).await?;
+            return Ok(());
+        }};
+    }
     let block = tokio::select! {
         block = get_nextblock() => block,
-        _ = async_std::task::sleep(std::time::Duration::from_secs(5)) =>
-            { poise::send_reply(ctx, |m| m.embed(|e| e.title("server down").color(FAIL))).await?; return Ok(()) },
+        _ = async_std::task::sleep(std::time::Duration::from_secs(5)) => fail!(ctx, FAIL),
     };
-    let (tps, mem, pcount) =
-        parse(&block).ok_or(anyhow::anyhow!("couldnt split block {block}."))?;
+    let (tps, mem, pcount) = if let Some(t) = parse(&block) {
+        t
+    } else {
+        fail!(ctx, FAIL)
+    };
     poise::send_reply(ctx, |m| {
         m.embed(|e| {
             if pcount > 0 {

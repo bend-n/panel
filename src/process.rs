@@ -14,13 +14,13 @@ pub struct Process {
 impl Process {
     /// spawns the server
     #[must_use]
-    pub async fn spawn() -> Self {
-        let stream = TcpStream::connect("localhost:6859").await.unwrap();
-        Self {
+    pub async fn spawn() -> anyhow::Result<Self> {
+        let stream = TcpStream::connect("localhost:6859").await?;
+        Ok(Self {
             inner: stream,
             input: None,
             output: None,
-        }
+        })
     }
 
     pub fn input(mut self, input: broadcast::Receiver<String>) -> Self {
@@ -54,6 +54,16 @@ impl Process {
                         input!("{s}");
                         s += "\n";
                         self.inner.write_all(s.as_bytes()).await.unwrap();
+                        // let mut last = 250;
+                        // while let Err(e) = self.inner.write_all(s.as_bytes()).await {
+                        //     last *= last;
+                        //     if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        //         println!("failed write, waiting {last}ms to retry.");
+                        //         async_std::task::sleep(Duration::from_millis(last)).await;
+                        //         continue;
+                        //     }
+                        //     panic!("{e:?}");
+                        // }
                         self.inner.flush().await.unwrap();
                     }
                 }

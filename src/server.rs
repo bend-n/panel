@@ -7,8 +7,8 @@ use axum::{
     Router, Server as AxumServer,
 };
 
-use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::broadcast;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tokio::{sync::broadcast, task::JoinHandle};
 
 // its a arced arcs
 pub struct State {
@@ -53,7 +53,7 @@ macro_rules! png {
 
 pub struct Server;
 impl Server {
-    pub async fn spawn(addr: SocketAddr, proc: Process) {
+    pub async fn spawn(addr: SocketAddr) {
         let (stdin_tx, stdin) = broadcast::channel(2);
         let state = Arc::new(State::new(stdin_tx));
         let router = Router::new()
@@ -61,18 +61,47 @@ impl Server {
             .route("/plaguess.png", png!(plaguess))
             .route("/favicon.ico", png!(logo32))
             .with_state(state.clone());
-        let mut server_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             AxumServer::bind(&addr)
                 .serve(router.into_make_service())
                 .await
                 .unwrap()
         });
-        let mut process_handle = proc.input(stdin).output(state.stdout.clone()).link();
+        let stdout = state.stdout.clone();
+        tokio::spawn(async move {
+            macro_rules! backoff {
+                ($backoff:expr) => {
+                    $backoff *= $backoff;
+                    println!("process died; waiting {}s", $backoff);
+                    async_std::task::sleep(Duration::from_secs($backoff)).await;
+                    continue;
+                };
+            }
+            let mut process_handle: Option<JoinHandle<()>> = None;
+            let mut backoff = 1u64;
+            loop {
+                if let Some(h) = process_handle {
+                    let _ = h.await;
+                    process_handle = None;
+                }
+
+                let spawn = if let Ok(s) = Process::spawn().await {
+                    s
+                } else {
+                    backoff!(backoff);
+                };
+                process_handle = Some(
+                    spawn
+                        .input(stdin.resubscribe())
+                        .output(stdout.clone())
+                        .link(),
+                );
+                if backoff == 1 {
+                    continue;
+                }
+                backoff!(backoff);
+            }
+        });
         Bot::spawn(state.stdout.subscribe(), state.stdin.clone()).await;
-        tokio::select! {
-            _ = (&mut server_handle) => process_handle.abort(),
-            _ = (&mut process_handle) => server_handle.abort(),
-        }
-        panic!("oh no");
     }
 }
