@@ -7,8 +7,8 @@ use axum::{
     Router, Server as AxumServer,
 };
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{sync::broadcast, task::JoinHandle};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::{sync::broadcast, task::JoinHandle, time::sleep, time::Duration};
 
 // its a arced arcs
 pub struct State {
@@ -21,7 +21,7 @@ pub struct State {
 impl State {
     fn new(stdin: broadcast::Sender<String>) -> Self {
         let (stdout, _) = broadcast::channel(2);
-        Self { stdin, stdout }
+        Self { stdout, stdin }
     }
 }
 
@@ -65,15 +65,15 @@ impl Server {
             AxumServer::bind(&addr)
                 .serve(router.into_make_service())
                 .await
-                .unwrap()
+                .unwrap();
         });
         let stdout = state.stdout.clone();
         tokio::spawn(async move {
             macro_rules! backoff {
                 ($backoff:expr) => {
-                    $backoff *= $backoff;
+                    $backoff <<= 1;
                     println!("process died; waiting {}s", $backoff);
-                    async_std::task::sleep(Duration::from_secs($backoff)).await;
+                    sleep(Duration::from_secs($backoff)).await;
                     continue;
                 };
             }
@@ -84,10 +84,7 @@ impl Server {
                     let _ = h.await;
                     process_handle = None;
                 }
-
-                let spawn = if let Ok(s) = Process::spawn().await {
-                    s
-                } else {
+                let Ok(spawn) = Process::spawn().await else {
                     backoff!(backoff);
                 };
                 process_handle = Some(

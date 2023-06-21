@@ -8,7 +8,7 @@ fn parse_js(from: &str) -> Result<String> {
     static RE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r#"```(js|javascript)?([^`]+)```"#).unwrap());
     let mat = RE
-        .captures(&from)
+        .captures(from)
         .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`js...\`\`\`."#))?;
     let script = mat.get(2).unwrap().as_str();
     let mut out = vec![];

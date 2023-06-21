@@ -1,5 +1,4 @@
 #![feature(lazy_cell)]
-
 use std::str::FromStr;
 #[macro_use]
 mod logging;

@@ -3,7 +3,7 @@ use crate::{return_next, send_ctx};
 use convert_case::{Case, Casing};
 use futures_util::StreamExt;
 
-const ITEMS: &'static [&'static str] = &[
+const ITEMS: &[&str] = &[
     "autoUpdate",
     "showConnectMessages",
     "enableVotekick",

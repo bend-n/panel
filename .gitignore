@@ -1,3 +1,5 @@
 /target
 *token
 html/
+# vote data
+**.vd

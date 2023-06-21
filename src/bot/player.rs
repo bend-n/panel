@@ -67,7 +67,7 @@ async fn get_players(stdin: &broadcast::Sender<String>) -> Result<Vec<Player>> {
                     name: strip_colors(name),
                     uuid: uuid.to_owned(),
                     ip: Ipv4Addr::from_str(ip).unwrap(),
-                })
+                });
             }
         }
     }

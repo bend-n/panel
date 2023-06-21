@@ -3,6 +3,7 @@ use crate::send_ctx;
 use anyhow::Result;
 use itertools::Itertools;
 use std::str::FromStr;
+use tokio::time::{sleep, Duration};
 
 fn parse(line: &str) -> Option<(u32, u32, u32)> {
     let mut v = vec![];
@@ -63,12 +64,10 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
     }
     let block = tokio::select! {
         block = get_nextblock() => block,
-        _ = async_std::task::sleep(std::time::Duration::from_secs(5)) => fail!(ctx, FAIL),
+        _ = sleep(Duration::from_secs(5)) => fail!(ctx, FAIL),
     };
-    let (tps, mem, pcount) = if let Some(t) = parse(&block) {
-        t
-    } else {
-        fail!(ctx, FAIL)
+    let Some((tps,mem,pcount)) = parse(&block) else {
+        fail!(ctx, FAIL);
     };
     poise::send_reply(ctx, |m| {
         m.embed(|e| {
@@ -77,7 +76,7 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
             }
             e.title("server online")
                 .field("tps", tps, true)
-                .field("memory use", humanize_bytes(Size::Mb(mem as f64)), true)
+                .field("memory use", humanize_bytes(Size::Mb(f64::from(mem))), true)
                 .field("players", pcount, true)
                 .color(SUCCESS)
         })
@@ -97,5 +96,6 @@ fn test_bytes() {
     assert!(humanize_bytes(Size::B(550.0)) == "550 B");
     assert!(humanize_bytes(Size::Kb(550.0)) == "550 KB");
     assert!(humanize_bytes(Size::Mb(650.0)) == "650 MB");
+    assert!(humanize_bytes(Size::Mb(2000.0)) == "2 GB");
     assert!(humanize_bytes(Size::Gb(15.3)) == "15.3 GB");
 }

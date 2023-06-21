@@ -4,8 +4,8 @@ use regex::Regex;
 use serenity::{builder::ExecuteWebhook, http::Http, json};
 use std::convert::AsRef;
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, error::TryRecvError};
+use tokio::time::{sleep, Duration, Instant};
 
 pub struct Webhook<'a> {
     pub skipped: broadcast::Sender<String>,
@@ -73,7 +73,7 @@ impl<'a> Webhook<'a> {
                                 flush!();
                             }
                         }
-                        async_std::task::sleep(Duration::from_millis(20)).await;
+                        sleep(Duration::from_millis(20)).await;
                         continue;
                     }
                 },
@@ -94,7 +94,7 @@ impl<'a> Webhook<'a> {
                     last = Some(now);
                 }
             }
-            async_std::task::sleep(Duration::from_millis(20)).await;
+            sleep(Duration::from_millis(20)).await;
         }
     }
 
@@ -104,18 +104,17 @@ impl<'a> Webhook<'a> {
         let mut unnamed: Option<String> = None;
 
         // this code is very game dependent
-        for line in feed.into_iter() {
+        for line in feed {
             let line: String = Style::fix(line);
             if let Some((name, msg)) = Style::split(&line) {
                 if let Some(n) = current.as_ref() {
                     if n == &name {
                         message.madd_panic(&msg);
                         continue;
-                    } else {
-                        let message = message.take().unwrap();
-                        self.send_message(n, &message).await;
-                        current.take();
                     }
+                    let message = message.take().unwrap();
+                    self.send_message(n, &message).await;
+                    current.take();
                 }
                 current = Some(name.to_owned());
                 message = Some(msg.to_owned());
@@ -125,7 +124,7 @@ impl<'a> Webhook<'a> {
                 }
                 continue;
             }
-            unnamed.madd(line);
+            unnamed.madd(unify(&line));
         }
         // finish
         if let Some(n) = current.as_ref() {
@@ -173,7 +172,7 @@ impl OutputStyle for MindustryStyle {
             return None;
         }
 
-        if let Some((u, c)) = line.split(": ").map(|s| unify(s)).collect_tuple() {
+        if let Some((u, c)) = line.split(": ").map(unify).collect_tuple() {
             let u = u.trim_start_matches('<');
             let c = c.trim_end_matches('>');
             if !(u.is_empty() || c.is_empty()) {
@@ -194,15 +193,8 @@ impl OutputStyle for MindustryStyle {
     }
 }
 
-fn unify(s: &str) -> String {
-    s.chars()
-        .filter_map(|c| {
-            if c > 'џ' {
-                return None;
-            }
-            Some(c)
-        })
-        .collect()
+pub fn unify(s: &str) -> String {
+    s.chars().filter(|&c| c < 'џ').collect()
 }
 
 trait Madd {

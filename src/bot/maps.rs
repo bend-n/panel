@@ -37,7 +37,7 @@ pub async fn autocomplete<'a>(
 ) -> impl futures::Stream<Item = String> + 'a {
     futures::stream::iter(Maps::get_all(&ctx.data().stdin).await)
         .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
+        .map(ToString::to_string)
 }
 
 #[poise::command(

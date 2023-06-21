@@ -17,6 +17,7 @@ use std::fs::read_to_string;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::broadcast;
 
+#[derive(Debug)]
 pub struct Data {
     stdin: broadcast::Sender<String>,
     vote_data: voting::Votes,
@@ -41,7 +42,7 @@ macro_rules! send_ctx {
 #[cfg(not(debug_assertions))]
 const PFX: &'static str = ">";
 #[cfg(debug_assertions)]
-const PFX: &'static str = "-";
+const PFX: &str = "-";
 
 const SUCCESS: (u8, u8, u8) = (34, 139, 34);
 const FAIL: (u8, u8, u8) = (255, 69, 0);
@@ -66,24 +67,13 @@ impl Bot {
                     status::command(),
                     config::set(),
                     voting::create(),
+                    voting::fixall(),
+                    voting::list(),
                     start(),
                     end(),
                     help(),
                 ],
-                on_error: |e| {
-                    Box::pin(async move {
-                        e.ctx()
-                            .unwrap()
-                            .send(|b| {
-                                b.embed(|e| {
-                                    e.color(FAIL)
-                                        .description("oy <@696196765564534825> i broke")
-                                })
-                            })
-                            .await
-                            .unwrap();
-                    })
-                },
+                on_error: |e| Box::pin(on_error(e)),
                 prefix_options: poise::PrefixFrameworkOptions {
                     edit_tracker: Some(poise::EditTracker::for_timespan(
                         std::time::Duration::from_secs(2 * 60),
@@ -103,6 +93,7 @@ impl Bot {
                         stdin,
                         vote_data: voting::Votes::new(vec![]),
                     })
+                    // todo: voting::fixall() auto
                 })
             });
 
@@ -112,11 +103,44 @@ impl Bot {
             SKIPPING.get_or_init(|| (wh.skip.clone(), wh.skipped.clone()));
             wh.link(stdout).await;
         });
-        f.run().await.unwrap()
+        f.run().await.unwrap();
     }
 }
 
 type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
+
+async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
+    use poise::FrameworkError::Command;
+    match error {
+        Command { error, ctx } => {
+            ctx.say(format!("e: `{error}`")).await.unwrap();
+            if let Ok(n) = std::env::var("RUST_LIB_BACKTRACE") {
+                use std::str::FromStr;
+                if let Ok(n) = u8::from_str(&n) {
+                    if n == 1 {
+                        let mut parsed = btparse::deserialize(dbg!(error.backtrace())).unwrap();
+                        let mut s = vec![];
+                        for frame in &mut parsed.frames {
+                            if let Some(line) = frame.line.take() {
+                                if frame.function.contains("panel")
+                                    || frame.function.contains("poise")
+                                    || frame.function.contains("serenity")
+                                {
+                                    s.push(format!("l{}@{}", line, frame.function));
+                                }
+                            }
+                        }
+                        s.truncate(15);
+                        ctx.say(format!("trace: ```rs\n{}\n```", s.join("\n")))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        }
+        err => poise::builtins::on_error(err).await.unwrap(),
+    }
+}
 
 #[poise::command(
     prefix_command,
@@ -138,7 +162,7 @@ async fn raw(
 #[macro_export]
 macro_rules! return_next {
     ($ctx:expr) => {{
-        let line = crate::bot::get_nextblock().await;
+        let line = $crate::bot::get_nextblock().await;
         $ctx.send(|m| m.content(line)).await?;
         return Ok(());
     }};
