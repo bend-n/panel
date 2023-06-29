@@ -4,6 +4,7 @@ mod config;
 mod js;
 mod maps;
 mod player;
+mod schematic;
 mod status;
 mod voting;
 
@@ -14,6 +15,7 @@ use maps::Maps;
 use serenity::http::Http;
 use serenity::prelude::*;
 use std::fs::read_to_string;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::broadcast;
 
@@ -69,6 +71,8 @@ impl Bot {
                     voting::create(),
                     voting::fixall(),
                     voting::list(),
+                    schematic::draw(),
+                    schematic::context_draw(),
                     start(),
                     end(),
                     help(),
@@ -114,28 +118,26 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
     match error {
         Command { error, ctx } => {
             ctx.say(format!("e: `{error}`")).await.unwrap();
-            if let Ok(n) = std::env::var("RUST_LIB_BACKTRACE") {
-                use std::str::FromStr;
-                if let Ok(n) = u8::from_str(&n) {
-                    if n == 1 {
-                        let mut parsed = btparse::deserialize(dbg!(error.backtrace())).unwrap();
-                        let mut s = vec![];
-                        for frame in &mut parsed.frames {
-                            if let Some(line) = frame.line.take() {
-                                if frame.function.contains("panel")
-                                    || frame.function.contains("poise")
-                                    || frame.function.contains("serenity")
-                                {
-                                    s.push(format!("l{}@{}", line, frame.function));
-                                }
+            if let Ok(n) = std::env::var("RUST_LIB_BACKTRACE")
+                && let Ok(n) = u8::from_str(&n) 
+                && n == 1 {
+                    let mut parsed = btparse::deserialize(dbg!(error.backtrace())).unwrap();
+                    let mut s = vec![];
+                    for frame in &mut parsed.frames {
+                        if let Some(line) = frame.line.take() 
+                            && (frame.function.contains("panel")
+                            || frame.function.contains("poise")
+                            || frame.function.contains("serenity"))
+                            {
+                                s.push(format!("l{}@{}", line, frame.function));
                             }
-                        }
-                        s.truncate(15);
-                        ctx.say(format!("trace: ```rs\n{}\n```", s.join("\n")))
-                            .await
-                            .unwrap();
+                        
                     }
-                }
+                    s.truncate(15);
+                    ctx.say(format!("trace: ```rs\n{}\n```", s.join("\n")))
+                        .await
+                        .unwrap();
+                
             }
         }
         err => poise::builtins::on_error(err).await.unwrap(),
@@ -183,7 +185,6 @@ async fn get_nextblock() -> String {
 #[poise::command(slash_command, category = "Control")]
 /// say something as the server
 async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Result<()> {
-    let _ = ctx.defer().await;
     ctx.data().stdin.send(format!("say {message}"))?;
     return_next!(ctx)
 }
@@ -216,7 +217,6 @@ pub async fn start(
     #[autocomplete = "maps::autocomplete"]
     map: String,
 ) -> Result<()> {
-    let _ = ctx.defer().await;
     send_ctx!(ctx, "host {}", Maps::find(&map, &ctx.data().stdin).await)?;
     return_next!(ctx)
 }
@@ -233,7 +233,6 @@ pub async fn end(
     #[autocomplete = "maps::autocomplete"]
     map: String,
 ) -> Result<()> {
-    let _ = ctx.defer().await;
     send_ctx!(
         ctx,
         "gameover {}",

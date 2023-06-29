@@ -1,4 +1,4 @@
-#![feature(lazy_cell)]
+#![feature(lazy_cell, let_chains)]
 use std::str::FromStr;
 #[macro_use]
 mod logging;
