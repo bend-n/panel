@@ -465,9 +465,9 @@ async fn fix(ctx: &Context<'_>, data: BufReader<std::fs::File>) -> Result<()> {
     };
     let v = VoteData::Before(v);
     if end < now {
-        v.push(&ctx).finish(&ctx).await
+        v.push(ctx).finish(ctx).await
     } else {
-        v.push(&ctx).input(&ctx).await?.finish(&ctx).await
+        v.push(ctx).input(ctx).await?.finish(ctx).await
     }
 }
 

@@ -14,7 +14,7 @@ static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(```)?([^`]+)(```)?"
 static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
 
 #[poise::command(context_menu_command = "Render schematic", category = "Info")]
-/// server status.
+/// draw schematic.
 pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
 
@@ -47,7 +47,7 @@ pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
 
 async fn send(ctx: &Context<'_>, s: &Schematic<'_>) -> Result<()> {
     let mut b = vec![];
-    let p = Renderer::render(s);
+    let p = s.render();
     PngEncoder::new(&mut b).write_image(&p, p.width(), p.height(), image::ColorType::Rgba8)?;
     let n = strip_colors(s.tags.get("name").unwrap());
     let filename = "image.png";
@@ -64,7 +64,7 @@ async fn send(ctx: &Context<'_>, s: &Schematic<'_>) -> Result<()> {
         })
     })
     .await?;
-    return Ok(());
+    Ok(())
 }
 
 async fn draw_impl(ctx: Context<'_>, msg: &str) -> Result<()> {

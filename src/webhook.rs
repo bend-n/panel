@@ -181,7 +181,7 @@ impl OutputStyle for MindustryStyle {
         }
 
         static REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r#"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]+==)\]"#).unwrap()
+            Regex::new(r"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]+==)\]").unwrap()
         });
         if let Some(captures) = REGEX.captures(line) {
             let player = unify(captures.get(1).unwrap().as_str());

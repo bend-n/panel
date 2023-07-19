@@ -66,7 +66,7 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
         block = get_nextblock() => block,
         _ = sleep(Duration::from_secs(5)) => fail!(ctx, FAIL),
     };
-    let Some((tps,mem,pcount)) = parse(&block) else {
+    let Some((tps, mem, pcount)) = parse(&block) else {
         fail!(ctx, FAIL);
     };
     poise::send_reply(ctx, |m| {

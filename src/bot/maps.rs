@@ -1,9 +1,13 @@
 use super::{get_nextblock, strip_colors, Context, Result, SUCCESS};
 use crate::send;
 use futures_util::StreamExt;
+use image::{codecs::png::PngEncoder, ImageEncoder};
+use mindus::*;
+use poise::serenity_prelude::*;
+use std::borrow::Cow;
+use std::sync::LazyLock;
 use tokio::sync::broadcast;
 use tokio::sync::OnceCell;
-
 pub struct Maps;
 impl Maps {
     pub async fn find(map: &str, stdin: &broadcast::Sender<String>) -> usize {
@@ -40,13 +44,7 @@ pub async fn autocomplete<'a>(
         .map(ToString::to_string)
 }
 
-#[poise::command(
-    slash_command,
-    prefix_command,
-    required_permissions = "ADMINISTRATOR",
-    category = "Info",
-    rename = "maps"
-)]
+#[poise::command(slash_command, prefix_command, category = "Info", rename = "maps")]
 /// lists the maps.
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
@@ -58,6 +56,32 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
             }
             e.description("map list.").color(SUCCESS)
         })
+    })
+    .await?;
+    Ok(())
+}
+
+static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
+
+#[poise::command(slash_command, prefix_command, category = "Info")]
+/// look at the current game.
+pub async fn view(ctx: Context<'_>) -> Result<()> {
+    let _ = ctx.defer_or_broadcast().await;
+    send!(ctx.data().stdin, "save 0")?;
+    let _ = get_nextblock().await;
+
+    // parsing the thing doesnt negate the ineed for a env var sooo
+    let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
+    let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
+    let i = m.render();
+    let mut b = vec![];
+    PngEncoder::new(&mut b).write_image(&i, i.width(), i.height(), image::ColorType::Rgba8)?;
+    poise::send_reply(ctx, |m| {
+        m.attachment(AttachmentType::Bytes {
+            data: Cow::Owned(b),
+            filename: "0.png".to_string(),
+        })
+        .embed(|e| e.attachment("0.png").color(SUCCESS))
     })
     .await?;
     Ok(())

@@ -65,6 +65,7 @@ impl Bot {
                     admin::remove(),
                     js::run(),
                     maps::list(),
+                    maps::view(),
                     player::list(),
                     status::command(),
                     config::set(),
