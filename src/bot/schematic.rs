@@ -39,7 +39,7 @@ pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
     category = "Info",
     rename = "draw_schematic"
 )]
-/// server status.
+/// draw schematic.
 pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
     draw_impl(ctx, &schematic).await

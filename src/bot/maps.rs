@@ -3,6 +3,7 @@ use crate::send;
 use futures_util::StreamExt;
 use image::{codecs::png::PngEncoder, ImageEncoder};
 use mindus::*;
+use oxipng::{optimize_from_memory as compress, Options};
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
 use std::sync::LazyLock;
@@ -70,12 +71,26 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
     send!(ctx.data().stdin, "save 0")?;
     let _ = get_nextblock().await;
 
-    // parsing the thing doesnt negate the ineed for a env var sooo
+    // parsing the thing doesnt negate the need for a env var sooo
     let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
     let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
+    println!(
+        "rendering {}",
+        m.tags.get("mapname").map_or("<unknown>", |v| &v)
+    );
     let i = m.render();
     let mut b = vec![];
     PngEncoder::new(&mut b).write_image(&i, i.width(), i.height(), image::ColorType::Rgba8)?;
+    let from = b.len();
+    if from > (10 << 20) {
+        b = compress(&b, &Options::from_preset(0)).unwrap();
+        use super::status::{humanize_bytes as human, Size};
+        println!(
+            "{} -> {}",
+            human(Size::B(from as f64)),
+            human(Size::B(b.len() as f64))
+        );
+    }
     poise::send_reply(ctx, |m| {
         m.attachment(AttachmentType::Bytes {
             data: Cow::Owned(b),
