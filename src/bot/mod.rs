@@ -16,7 +16,10 @@ use serenity::http::Http;
 use serenity::prelude::*;
 use std::fs::read_to_string;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Arc, OnceLock,
+};
 use tokio::sync::broadcast;
 
 #[derive(Debug)]
@@ -25,7 +28,7 @@ pub struct Data {
     vote_data: voting::Votes,
 }
 
-static SKIPPING: OnceLock<(Arc<Mutex<u8>>, broadcast::Sender<String>)> = OnceLock::new();
+static SKIPPING: OnceLock<(Arc<AtomicU8>, broadcast::Sender<String>)> = OnceLock::new();
 
 #[macro_export]
 macro_rules! send {
@@ -173,9 +176,9 @@ macro_rules! return_next {
 
 async fn get_nextblock() -> String {
     let (skip_count, skip_send) = SKIPPING.get().unwrap();
-    {
-        *skip_count.lock().unwrap() += 1;
-    }
+
+    skip_count.fetch_add(1, Ordering::Relaxed);
+
     skip_send
         .subscribe()
         .recv()

@@ -3,13 +3,16 @@ use poise::serenity_prelude::Webhook as RealHook;
 use regex::Regex;
 use serenity::{builder::ExecuteWebhook, http::Http, json};
 use std::convert::AsRef;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Arc, LazyLock,
+};
 use tokio::sync::broadcast::{self, error::TryRecvError};
 use tokio::time::{sleep, Duration, Instant};
 
 pub struct Webhook<'a> {
     pub skipped: broadcast::Sender<String>,
-    pub skip: Arc<Mutex<u8>>,
+    pub skip: Arc<AtomicU8>,
     inner: RealHook,
     http: &'a Http,
 }
@@ -19,7 +22,7 @@ impl<'a> Webhook<'a> {
         Self {
             inner: RealHook::from_url(http, url).await.unwrap(),
             http: http.as_ref(),
-            skip: Arc::new(Mutex::new(0)),
+            skip: Arc::new(AtomicU8::new(0)),
             skipped: broadcast::channel(16).0,
         }
     }
@@ -78,14 +81,15 @@ impl<'a> Webhook<'a> {
                     }
                 },
                 Ok(m) => {
-                    let mut lock = self.skip.lock().unwrap();
-                    if *lock > 0 {
-                        *lock -= 1;
+                    if self
+                        .skip
+                        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+                        .is_ok()
+                    {
                         input!("{m} < skipped");
                         self.skipped.send(m).unwrap();
                         continue;
                     }
-                    drop(lock);
                     for line in m.lines() {
                         let line = line.to_string();
                         input!("{line}");
