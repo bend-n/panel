@@ -11,7 +11,7 @@ mod webhook;
 use server::*;
 use std::net::SocketAddr;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     Server::spawn(SocketAddr::from((
         [0, 0, 0, 0],
