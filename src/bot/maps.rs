@@ -7,6 +7,7 @@ use oxipng::{optimize_from_memory as compress, Options};
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
 use std::sync::LazyLock;
+use std::time::{Instant};
 use tokio::sync::broadcast;
 use tokio::sync::OnceCell;
 pub struct Maps;
@@ -73,30 +74,31 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
 
     // parsing the thing doesnt negate the need for a env var sooo
     let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
+    let then = Instant::now();
     let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
-    println!(
-        "rendering {}",
-        m.tags.get("mapname").map_or("<unknown>", |v| &v)
-    );
+    let deser_took = then.elapsed();
+    let name = m.tags.get("mapname").map_or("<unknown>", |v| v);
+    let render_took = Instant::now();
     let i = m.render();
+    let render_took = render_took.elapsed();
+    let encoding_took = Instant::now();
     let mut b = vec![];
     PngEncoder::new(&mut b).write_image(&i, i.width(), i.height(), image::ColorType::Rgba8)?;
+    let encoding_took = encoding_took.elapsed();
     let from = b.len();
-    if from > (10 << 20) {
-        b = compress(&b, &Options::from_preset(0)).unwrap();
-        use super::status::{humanize_bytes as human, Size};
-        println!(
-            "{} -> {}",
-            human(Size::B(from as f64)),
-            human(Size::B(b.len() as f64))
-        );
-    }
+    let compression_took = Instant::now();
+    b = compress(&b, &Options::from_preset(0)).unwrap();
+    use super::status::{humanize_bytes as human, Size};
+    let size_from = human(Size::B(from as f64));
+    let size_to = human(Size::B(b.len() as f64));
+    let compression_took = compression_took.elapsed();
+    let took = then.elapsed();
     poise::send_reply(ctx, |m| {
         m.attachment(AttachmentType::Bytes {
             data: Cow::Owned(b),
             filename: "0.png".to_string(),
         })
-        .embed(|e| e.attachment("0.png").color(SUCCESS))
+        .embed(|e| e.attachment("0.png").color(SUCCESS).footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, encoding: {}ms, compression: {:.2}s ({size_from} -> {size_to}))", took.as_secs_f32(), deser_took.as_millis(), render_took.as_secs_f32(), encoding_took.as_millis(), compression_took.as_secs_f32()))))
     })
     .await?;
     Ok(())
