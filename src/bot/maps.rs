@@ -7,7 +7,7 @@ use oxipng::{optimize_from_memory as compress, Options};
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
 use std::sync::LazyLock;
-use std::time::{Instant};
+use std::time::Instant;
 use tokio::sync::broadcast;
 use tokio::sync::OnceCell;
 pub struct Maps;

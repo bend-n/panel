@@ -1,8 +1,7 @@
 use super::{strip_colors, Context, SUCCESS};
 use anyhow::{anyhow, Result};
 use image::{codecs::png::PngEncoder, ImageEncoder};
-use mindus::data::schematic::R64Error;
-use mindus::data::{DataRead, Serializer};
+use mindus::data::{DataRead, DataWrite, Serializer};
 use mindus::*;
 use poise::serenity_prelude::*;
 use regex::Regex;
@@ -10,7 +9,7 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::sync::LazyLock;
 
-static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(```)?([^`]+)(```)?"#).unwrap());
+static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(```)?(\n)?([^`]+)(\n)?(```)?"#).unwrap());
 static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
 
 #[poise::command(context_menu_command = "Render schematic", category = "Info")]
@@ -24,13 +23,10 @@ pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
             let mut ss = SchematicSerializer(&REG);
             let s = a.download().await?;
             let mut s = DataRead::new(&s);
-            let Ok(s) = ss.deserialize(&mut s) else {
-                ctx.say(format!("invalid schematic ({})", a.filename)).await?;
-                return Ok(());
-            };
-            return send(&ctx, &s).await;
+            let s = ss.deserialize(&mut s).map_err(|e| anyhow!("invalid schematic: {e} with file {}", a.filename))?;
+            return send(&ctx, &s, false).await;
     }
-    draw_impl(ctx, &msg.content).await
+    draw_impl(ctx, &msg.content, false).await
 }
 
 #[poise::command(
@@ -42,49 +38,49 @@ pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
 /// draw schematic.
 pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
-    draw_impl(ctx, &schematic).await
+    draw_impl(ctx, &schematic, true).await
 }
 
-async fn send(ctx: &Context<'_>, s: &Schematic<'_>) -> Result<()> {
+async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Result<()> {
     let mut b = vec![];
     let p = s.render();
     PngEncoder::new(&mut b).write_image(&p, p.width(), p.height(), image::ColorType::Rgba8)?;
     let n = strip_colors(s.tags.get("name").unwrap());
-    let filename = "image.png";
     poise::send_reply(*ctx, |m| {
+        if send_schematic {
+            let mut out = DataWrite::default();
+            SchematicSerializer(&REG).serialize(&mut out, s).unwrap();
+            m.attachment(AttachmentType::Bytes {
+                data: Cow::Owned(out.consume()),
+                filename: "schem.msch".to_string(),
+            });
+        }
         m.attachment(AttachmentType::Bytes {
             data: Cow::Owned(b),
-            filename: filename.to_string(),
+            filename: "image.png".to_string(),
         })
         .embed(|e| {
             if let Some(d) = s.tags.get("description") {
                 e.description(d);
             }
-            e.title(n).attachment(filename).color(SUCCESS)
+            if send_schematic {
+                e.attachment("schem.msch");
+            }
+            e.title(n).attachment("image.png").color(SUCCESS)
         })
     })
     .await?;
     Ok(())
 }
 
-async fn draw_impl(ctx: Context<'_>, msg: &str) -> Result<()> {
+async fn draw_impl(ctx: Context<'_>, msg: &str, send_schematic: bool) -> Result<()> {
     let mut ss = SchematicSerializer(&REG);
     let schem_text = RE
         .captures(msg)
         .ok_or(anyhow!("couldnt find schematic"))?
-        .get(2)
+        .get(3)
         .unwrap()
         .as_str();
-    let s = match ss.deserialize_base64(schem_text) {
-        Err(e) => {
-            ctx.say(match e {
-                R64Error::Base64(_) => "invalid base64",
-                R64Error::Content(_) => "invalid schematic",
-            })
-            .await?;
-            return Ok(());
-        }
-        Ok(x) => x,
-    };
-    send(&ctx, &s).await
+    let s = ss.deserialize_base64(schem_text).map_err(|e| anyhow!("schematic deserializatiion failed: {e}"))?;
+    send(&ctx, &s, send_schematic).await
 }
