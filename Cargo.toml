@@ -42,7 +42,7 @@ serde_json = "1.0"
 btparse = "0.1.1"
 mindus = { version = "1", features = ["schem_shadow"], default-features = false }
 image = { version = "0.24.6", features = ["png"], default-features = false }
-oxipng = { version = "8.0.0", features = [], default-features = false }
+oxipng = { git = "https://github.com/shssoichiro/oxipng", branch = "master", features = [], default-features = false }
 
 [profile.release]
 strip = true
