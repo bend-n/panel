@@ -2,7 +2,7 @@ mod admin;
 mod bans;
 mod config;
 mod js;
-mod maps;
+pub mod maps;
 mod player;
 mod schematic;
 mod status;

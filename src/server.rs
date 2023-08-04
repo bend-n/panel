@@ -2,7 +2,7 @@ use crate::bot::Bot;
 use crate::process::Process;
 use axum::{
     http::header::CONTENT_TYPE,
-    response::{AppendHeaders, Html},
+    response::{AppendHeaders, Html, IntoResponse},
     routing::get,
     Router, Server as AxumServer,
 };
@@ -41,14 +41,26 @@ macro_rules! html {
 macro_rules! png {
     ($file:expr) => {
         get(|| async {
-            {
-                (
-                    AppendHeaders([(CONTENT_TYPE, "image/png")]),
-                    include_bytes!(concat!("../media/", stringify!($file), ".png")),
-                )
-            }
+            (
+                AppendHeaders([(CONTENT_TYPE, "image/png")]),
+                include_bytes!(concat!("../media/", stringify!($file), ".png")),
+            )
         })
     };
+}
+
+async fn map_view(
+    axum::extract::State(state): axum::extract::State<Arc<State>>,
+) -> impl IntoResponse {
+    (
+        AppendHeaders([(CONTENT_TYPE, "image/png")]),
+        crate::bot::maps::MAP_IMAGE
+            .get(&state.stdin)
+            .await
+            .unwrap()
+            .0
+            .clone(),
+    )
 }
 
 pub struct Server;
@@ -60,6 +72,7 @@ impl Server {
             .route("/", html!(index))
             .route("/plaguess.png", png!(plaguess))
             .route("/favicon.ico", png!(logo32))
+            .route("/view", get(map_view))
             .with_state(state.clone());
         tokio::spawn(async move {
             AxumServer::bind(&addr)

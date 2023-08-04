@@ -5,10 +5,13 @@ use mindus::*;
 use oxipng::*;
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
-use std::sync::LazyLock;
-use std::time::Instant;
-use tokio::sync::broadcast;
-use tokio::sync::OnceCell;
+use std::sync::{
+    atomic::{AtomicU64, Ordering::Relaxed},
+    LazyLock,
+};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::broadcast::{self, Sender};
+use tokio::sync::{MutexGuard, OnceCell};
 pub struct Maps;
 impl Maps {
     pub async fn find(map: &str, stdin: &broadcast::Sender<String>) -> usize {
@@ -62,52 +65,104 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
     Ok(())
 }
 
-static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
+pub struct RenderInfo {
+    deserialization: Duration,
+    render: Duration,
+    compression: Duration,
+    total: Duration,
+    name: String,
+}
+pub static MAP_IMAGE: MapImage = MapImage(Mutex::const_new(vec![]), AtomicU64::new(0));
+pub struct MapImage(Mutex<Vec<u8>>, AtomicU64);
+impl MapImage {
+    /// procure the map image.
+    pub async fn get(
+        &self,
+        stdin: &Sender<String>,
+        // returning a guard is questionable
+    ) -> Result<(MutexGuard<Vec<u8>>, Option<RenderInfo>)> {
+        let mut lock = self.0.lock().await;
+        // me in a million years when its 1901 and we never get a new render
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Ok(
+            if self
+                .1
+                .fetch_update(Relaxed, Relaxed, |then| (now > then + 70).then(|| now))
+                .is_err()
+            {
+                (lock, None)
+            } else {
+                send!(stdin, "save 0")?;
+                let _ = get_nextblock().await;
+
+                // parsing the thing doesnt negate the need for a env var sooo
+                let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
+                let then = Instant::now();
+                static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
+                let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
+                let deser_took = then.elapsed();
+                let name = m.tags.get("mapname").unwrap().to_owned();
+                let render_took = Instant::now();
+                let i = m.render();
+                let render_took = render_took.elapsed();
+                let compression_took = Instant::now();
+                // TODO make render() return RgbImage
+                let i = RawImage::new(
+                    i.width(),
+                    i.height(),
+                    ColorType::RGB {
+                        transparent_color: None,
+                    },
+                    BitDepth::Eight,
+                    image::DynamicImage::ImageRgba8(i).to_rgb8().to_vec(),
+                )
+                .unwrap();
+                *lock = i
+                    .create_optimized_png(&oxipng::Options {
+                        filter: indexset! { RowFilter::None },
+                        bit_depth_reduction: false,
+                        color_type_reduction: false,
+                        palette_reduction: false,
+                        grayscale_reduction: false,
+                        ..oxipng::Options::from_preset(0)
+                    })
+                    .unwrap();
+                let compression_took = compression_took.elapsed();
+                let total = then.elapsed();
+                (
+                    lock,
+                    Some(RenderInfo {
+                        deserialization: deser_took,
+                        render: render_took,
+                        compression: compression_took,
+                        name,
+                        total,
+                    }),
+                )
+            },
+        )
+    }
+}
 
 #[poise::command(slash_command, prefix_command, category = "Info")]
 /// look at the current game.
 pub async fn view(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
-    send!(ctx.data().stdin, "save 0")?;
-    let _ = get_nextblock().await;
-
-    // parsing the thing doesnt negate the need for a env var sooo
-    let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
-    let then = Instant::now();
-    let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
-    let deser_took = then.elapsed();
-    let name = m.tags.get("mapname").map_or("<unknown>", |v| v);
-    let render_took = Instant::now();
-    let i = m.render();
-    let render_took = render_took.elapsed();
-    let compression_took = Instant::now();
-    // TODO make render() return RgbImage
-    let i = RawImage::new(
-        i.width(),
-        i.height(),
-        ColorType::RGB {
-            transparent_color: None,
-        },
-        BitDepth::Eight,
-        image::DynamicImage::ImageRgba8(i).to_rgb8().to_vec(),
-    )
-    .unwrap();
-    let b = i
-        .create_optimized_png(&oxipng::Options {
-            filter: indexset! { RowFilter::None },
-            ..oxipng::Options::from_preset(0)
-        })
-        .unwrap();
-    use super::status::{humanize_bytes as human, Size};
-    let size = human(Size::B(b.len() as f64));
-    let compression_took = compression_took.elapsed();
-    let took = then.elapsed();
+    let (i, info) = MAP_IMAGE.get(&ctx.data().stdin).await?;
     poise::send_reply(ctx, |m| {
         m.attachment(AttachmentType::Bytes {
-            data: Cow::Owned(b),
+            data: Cow::Borrowed(&i),
             filename: "0.png".to_string(),
         })
-        .embed(|e| e.attachment("0.png").color(SUCCESS).footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, compression: {:.2}s ({size}))", took.as_secs_f32(), deser_took.as_millis(), render_took.as_secs_f32(), compression_took.as_secs_f32()))))
+        .embed(|e| {
+            if let Some(RenderInfo { deserialization, render, compression, total, name }) = info {
+                e.footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, compression: {:.2}s)", total.as_secs_f32(), deserialization.as_millis(), render.as_secs_f32(), compression.as_secs_f32())));
+            }
+            e.attachment("0.png").color(SUCCESS)
+        })
     })
     .await?;
     Ok(())

@@ -12,24 +12,34 @@
       background-attachment: fixed;
       background-position: center;
       background-repeat: no-repeat;
+      background-color: #3E3B3B;
     }
 
     h1 {
       text-align: center;
       color: wheat;
-      font-family: 'Ubuntu', sans-serif;
+      font-family: 'Ubuntu', 'Helvetica', 'Arial', sans-serif;
       font-weight: bolder;
       font-size: 5em;
-      vertical-align: middle;
+      user-select: none;
+      margin: 0px !important;
+      text-shadow: -8px -0px 0 #3E3B3B, 0px -0px 0 #3E3B3B, -8px 0px 0 #3E3B3B, 0px 0px 0 #3E3B3B;
+    }
+
+    h2 {
+      font-family: 'Ubuntu', 'Helvetica', 'Arial', sans-serif;
+      font-size: 1.2em;
+      text-align: center;
+      color: wheat;
+      user-select: none;
+      text-shadow: -1px -1px 0 #3E3B3B, 1px -1px 0 #3E3B3B, -1px 1px 0 #3E3B3B, 1px 1px 0 #3E3B3B;
     }
 
     .text-holder {
-      height: 200px;
-      width: 400px;
-
+      align-self: center;
       position: fixed;
-      top: 50%;
-      left: 50%;
+      top: 20%;
+      left: 80%;
       margin-top: -100px;
       margin-left: -200px;
 
@@ -41,6 +51,13 @@
 <body>
   <div class="text-holder">
     <h1>Plague</h1>
+    <h2>
+      When attack and defense combine<br>
+      Plague, a chaotic pvp gamemode<br>
+      One team, a desperate race to procure units<br>
+      The other, in a dance of constantly evolving defence<br>
+      A battlefield ever changing; Strategies never constant
+    </h2>
   </div>
 </body>
 
