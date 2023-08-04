@@ -9,7 +9,8 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::sync::LazyLock;
 
-static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(```)?(\n)?([^`]+)(\n)?(```)?"#).unwrap());
+static RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(```)?(\n)?([^`]+)(\n)?(```)?"#).unwrap());
 static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
 
 #[poise::command(context_menu_command = "Render schematic", category = "Info")]
@@ -81,6 +82,8 @@ async fn draw_impl(ctx: Context<'_>, msg: &str, send_schematic: bool) -> Result<
         .get(3)
         .unwrap()
         .as_str();
-    let s = ss.deserialize_base64(schem_text).map_err(|e| anyhow!("schematic deserializatiion failed: {e}"))?;
+    let s = ss
+        .deserialize_base64(schem_text)
+        .map_err(|e| anyhow!("schematic deserializatiion failed: {e}"))?;
     send(&ctx, &s, send_schematic).await
 }

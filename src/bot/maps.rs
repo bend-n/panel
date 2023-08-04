@@ -1,9 +1,8 @@
 use super::{get_nextblock, strip_colors, Context, Result, SUCCESS};
 use crate::send;
 use futures_util::StreamExt;
-use image::{codecs::png::PngEncoder, ImageEncoder};
 use mindus::*;
-use oxipng::{optimize_from_memory as compress, Options};
+use oxipng::*;
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
 use std::sync::LazyLock;
@@ -81,16 +80,26 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
     let render_took = Instant::now();
     let i = m.render();
     let render_took = render_took.elapsed();
-    let encoding_took = Instant::now();
-    let mut b = vec![];
-    PngEncoder::new(&mut b).write_image(&i, i.width(), i.height(), image::ColorType::Rgba8)?;
-    let encoding_took = encoding_took.elapsed();
-    let from = b.len();
     let compression_took = Instant::now();
-    b = compress(&b, &Options::from_preset(0)).unwrap();
+    // TODO make render() return RgbImage
+    let i = RawImage::new(
+        i.width(),
+        i.height(),
+        ColorType::RGB {
+            transparent_color: None,
+        },
+        BitDepth::Eight,
+        image::DynamicImage::ImageRgba8(i).to_rgb8().to_vec(),
+    )
+    .unwrap();
+    let b = i
+        .create_optimized_png(&oxipng::Options {
+            filter: indexset! { RowFilter::None },
+            ..oxipng::Options::from_preset(0)
+        })
+        .unwrap();
     use super::status::{humanize_bytes as human, Size};
-    let size_from = human(Size::B(from as f64));
-    let size_to = human(Size::B(b.len() as f64));
+    let size = human(Size::B(b.len() as f64));
     let compression_took = compression_took.elapsed();
     let took = then.elapsed();
     poise::send_reply(ctx, |m| {
@@ -98,7 +107,7 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
             data: Cow::Owned(b),
             filename: "0.png".to_string(),
         })
-        .embed(|e| e.attachment("0.png").color(SUCCESS).footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, encoding: {}ms, compression: {:.2}s ({size_from} -> {size_to}))", took.as_secs_f32(), deser_took.as_millis(), render_took.as_secs_f32(), encoding_took.as_millis(), compression_took.as_secs_f32()))))
+        .embed(|e| e.attachment("0.png").color(SUCCESS).footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, compression: {:.2}s ({size}))", took.as_secs_f32(), deser_took.as_millis(), render_took.as_secs_f32(), compression_took.as_secs_f32()))))
     })
     .await?;
     Ok(())
