@@ -67,10 +67,7 @@ impl Process {
                 for line in string.lines() {
                     output!("{line}");
                 }
-                let stripped =
-                    String::from_utf8_lossy(&strip_ansi_escapes::strip(&string).unwrap())
-                        .into_owned();
-                output.send(stripped).unwrap();
+                output.send(string).unwrap();
                 sleep(Duration::from_millis(500)).await;
             }
         })

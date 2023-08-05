@@ -106,10 +106,9 @@ impl MapImage {
                 let deser_took = then.elapsed();
                 let name = m.tags.get("mapname").unwrap().to_owned();
                 let render_took = Instant::now();
-                let i = m.render();
+                let i = unsafe { m.render() };
                 let render_took = render_took.elapsed();
                 let compression_took = Instant::now();
-                // TODO make render() return RgbImage
                 let i = RawImage::new(
                     i.width(),
                     i.height(),
@@ -117,7 +116,7 @@ impl MapImage {
                         transparent_color: None,
                     },
                     BitDepth::Eight,
-                    image::DynamicImage::ImageRgba8(i).to_rgb8().to_vec(),
+                    i.into_vec(),
                 )
                 .unwrap();
                 *lock = i

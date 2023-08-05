@@ -44,7 +44,7 @@ pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
 
 async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Result<()> {
     let mut b = vec![];
-    let p = s.render();
+    let p = unsafe { s.render() };
     PngEncoder::new(&mut b).write_image(&p, p.width(), p.height(), image::ColorType::Rgba8)?;
     let n = strip_colors(s.tags.get("name").unwrap());
     poise::send_reply(*ctx, |m| {

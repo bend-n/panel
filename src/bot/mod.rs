@@ -186,7 +186,11 @@ async fn get_nextblock() -> String {
         .unwrap_or("._?".to_string())
 }
 
-#[poise::command(slash_command, category = "Control")]
+#[poise::command(
+    slash_command,
+    category = "Control",
+    required_permissions = "ADMINISTRATOR"
+)]
 /// say something as the server
 async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Result<()> {
     ctx.data().stdin.send(format!("say {message}"))?;
