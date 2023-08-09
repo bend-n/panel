@@ -1,8 +1,8 @@
 use super::{strip_colors, Context, SUCCESS};
 use anyhow::{anyhow, Result};
-use image::{codecs::png::PngEncoder, ImageEncoder};
 use mindus::data::{DataRead, DataWrite, Serializer};
 use mindus::*;
+use oxipng::*;
 use poise::serenity_prelude::*;
 use regex::Regex;
 use std::borrow::Cow;
@@ -34,7 +34,8 @@ pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
     prefix_command,
     slash_command,
     category = "Info",
-    rename = "draw_schematic"
+    rename = "draw_schematic",
+    track_edits
 )]
 /// draw schematic.
 pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
@@ -43,10 +44,28 @@ pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
 }
 
 async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Result<()> {
-    let mut b = vec![];
-    let p = unsafe { s.render() };
-    PngEncoder::new(&mut b).write_image(&p, p.width(), p.height(), image::ColorType::Rgba8)?;
     let n = strip_colors(s.tags.get("name").unwrap());
+    let p = unsafe { s.render() };
+    let p = RawImage::new(
+        p.width(),
+        p.height(),
+        ColorType::RGB {
+            transparent_color: None,
+        },
+        BitDepth::Eight,
+        p.into_vec(),
+    )
+    .unwrap();
+    let p = p
+        .create_optimized_png(&oxipng::Options {
+            filter: indexset! { RowFilter::None },
+            bit_depth_reduction: false,
+            color_type_reduction: false,
+            palette_reduction: false,
+            grayscale_reduction: false,
+            ..oxipng::Options::from_preset(0)
+        })
+        .unwrap();
     poise::send_reply(*ctx, |m| {
         if send_schematic {
             let mut out = DataWrite::default();
@@ -57,7 +76,7 @@ async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Res
             });
         }
         m.attachment(AttachmentType::Bytes {
-            data: Cow::Owned(b),
+            data: Cow::Owned(p),
             filename: "image.png".to_string(),
         })
         .embed(|e| {

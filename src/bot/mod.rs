@@ -14,8 +14,8 @@ use maps::Maps;
 
 use serenity::http::Http;
 use serenity::prelude::*;
+use std::fmt::Write;
 use std::fs::read_to_string;
-use std::str::FromStr;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc, OnceLock,
@@ -121,28 +121,38 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
     use poise::FrameworkError::Command;
     match error {
         Command { error, ctx } => {
-            ctx.say(format!("e: `{error}`")).await.unwrap();
-            if let Ok(n) = std::env::var("RUST_LIB_BACKTRACE")
-                && let Ok(n) = u8::from_str(&n) 
-                && n == 1 {
-                    let mut parsed = btparse::deserialize(dbg!(error.backtrace())).unwrap();
-                    let mut s = vec![];
-                    for frame in &mut parsed.frames {
-                        if let Some(line) = frame.line.take() 
-                            && (frame.function.contains("panel")
-                            || frame.function.contains("poise")
-                            || frame.function.contains("serenity"))
-                            {
-                                s.push(format!("l{}@{}", line, frame.function));
-                            }
-                        
+            let mut msg;
+            {
+                let mut chain = error.chain();
+                msg = format!("e: `{}`", chain.next().unwrap());
+                for mut source in chain {
+                    write!(msg, "from: `{source}`").unwrap();
+                    loop {
+                        let Some(next) = source.source() else { break };
+                        write!(msg, "from: `{next}`").unwrap();
+                        source = next;
                     }
-                    s.truncate(15);
-                    ctx.say(format!("trace: ```rs\n{}\n```", s.join("\n")))
-                        .await
-                        .unwrap();
-                
+                }
             }
+            let bt = error.backtrace();
+            if bt.status() == std::backtrace::BacktraceStatus::Captured {
+                let parsed = btparse::deserialize(dbg!(error.backtrace())).unwrap();
+                let mut s = vec![];
+                for frame in parsed.frames {
+                    if let Some(line) = frame.line
+                        && (frame.function.contains("panel")
+                        || frame.function.contains("poise")
+                        || frame.function.contains("serenity")
+                        || frame.function.contains("mindus")
+                        || frame.function.contains("image"))
+                        {
+                            s.push(format!("l{}@{}", line, frame.function));
+                        }
+                }
+                s.truncate(15);
+                write!(msg, "trace: ```rs\n{}\n```", s.join("\n")).unwrap();
+            }
+            ctx.say(msg).await.unwrap();
         }
         err => poise::builtins::on_error(err).await.unwrap(),
     }

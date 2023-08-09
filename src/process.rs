@@ -51,7 +51,7 @@ impl Process {
                     },
                     Ok(mut s) => {
                         input!("{s}");
-                        s += "\n";
+                        s.push_str("\n");
                         self.inner.write_all(s.as_bytes()).await.unwrap();
                         self.inner.flush().await.unwrap();
                     }
@@ -59,10 +59,10 @@ impl Process {
 
                 let string = {
                     let n = tokio::select! {
-                        n = {self.inner.read(&mut stdout)} => n.unwrap(),
+                        n = self.inner.read(&mut stdout) => n.unwrap(),
                         _ = sleep(Duration::from_millis(500)) => continue,
                     };
-                    String::from_utf8_lossy(&stdout[..n]).into_owned()
+                    String::from_utf8_lossy(&strip_ansi_escapes::strip(&stdout[..n])).into_owned()
                 };
                 for line in string.lines() {
                     output!("{line}");
