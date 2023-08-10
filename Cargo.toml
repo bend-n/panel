@@ -42,7 +42,7 @@ btparse = "0.1.1"
 mindus = { version = "3", features = [], default-features = false }
 image = { version = "0.24.6", features = ["png"], default-features = false }
 oxipng = { git = "https://github.com/shssoichiro/oxipng", branch = "master", features = [], default-features = false }
-strip-ansi-escapes = "0.1.2"
+strip-ansi-escapes = "0.2.0"
 
 [profile.release]
 strip = true
