@@ -45,7 +45,7 @@ pub async fn draw(ctx: Context<'_>, schematic: String) -> Result<()> {
 
 async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Result<()> {
     let n = strip_colors(s.tags.get("name").unwrap());
-    let p = unsafe { s.render() };
+    let p = s.render();
     let p = RawImage::new(
         p.width(),
         p.height(),
@@ -53,7 +53,7 @@ async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Res
             transparent_color: None,
         },
         BitDepth::Eight,
-        p.into_vec(),
+        p.buffer,
     )
     .unwrap();
     let p = p
