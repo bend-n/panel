@@ -397,7 +397,13 @@ where
     }
 }
 
-#[poise::command(slash_command, category = "Discord", rename = "create_vote")]
+#[poise::command(
+    slash_command,
+    category = "Discord",
+    rename = "create_vote",
+    default_member_permissions = "ADMINISTRATOR",
+    required_permissions = "ADMINISTRATOR"
+)]
 /// make a vote
 pub async fn create(
     ctx: Context<'_>,
@@ -474,6 +480,7 @@ async fn fix(ctx: &Context<'_>, data: BufReader<std::fs::File>) -> Result<()> {
 #[poise::command(
     slash_command,
     category = "Discord",
+    default_member_permissions = "ADMINISTRATOR",
     required_permissions = "ADMINISTRATOR"
 )]
 pub async fn fixall(ctx: Context<'_>) -> Result<()> {

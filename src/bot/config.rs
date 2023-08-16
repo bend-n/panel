@@ -39,7 +39,13 @@ async fn complete<'a>(
         .map(|name| name.from_case(Case::Camel).to_case(Case::Lower))
 }
 
-#[poise::command(slash_command, category = "Configuration", rename = "config")]
+#[poise::command(
+    slash_command,
+    category = "Configuration",
+    rename = "config",
+    default_member_permissions = "ADMINISTRATOR",
+    required_permissions = "ADMINISTRATOR"
+)]
 /// change a setting
 pub async fn set(
     ctx: Context<'_>,

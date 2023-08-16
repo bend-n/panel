@@ -2,7 +2,13 @@ use super::{Context, Result};
 use crate::bot::player::{self, Players};
 use crate::{return_next, send_ctx};
 
-#[poise::command(slash_command, category = "Control", rename = "ban")]
+#[poise::command(
+    slash_command,
+    category = "Control",
+    rename = "ban",
+    required_permissions = "ADMINISTRATOR",
+    default_member_permissions = "ADMINISTRATOR"
+)]
 /// ban a player by uuid and ip
 pub async fn add(
     ctx: Context<'_>,
@@ -20,7 +26,13 @@ pub async fn add(
     return_next!(ctx)
 }
 
-#[poise::command(slash_command, category = "Control", rename = "unban")]
+#[poise::command(
+    slash_command,
+    category = "Control",
+    rename = "unban",
+    default_member_permissions = "ADMINISTRATOR",
+    required_permissions = "ADMINISTRATOR"
+)]
 /// unban a player by uuid or ip
 pub async fn remove(
     ctx: Context<'_>,

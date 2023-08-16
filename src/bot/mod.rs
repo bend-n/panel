@@ -161,6 +161,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
 #[poise::command(
     prefix_command,
     required_permissions = "ADMINISTRATOR",
+    default_member_permissions = "ADMINISTRATOR",
     category = "Control",
     track_edits
 )]
@@ -199,6 +200,7 @@ async fn get_nextblock() -> String {
 #[poise::command(
     slash_command,
     category = "Control",
+    default_member_permissions = "ADMINISTRATOR",
     required_permissions = "ADMINISTRATOR"
 )]
 /// say something as the server
@@ -225,6 +227,7 @@ fn strip_colors(from: &str) -> String {
 
 #[poise::command(
     slash_command,
+    default_member_permissions = "ADMINISTRATOR",
     required_permissions = "ADMINISTRATOR",
     category = "Control"
 )]
@@ -242,6 +245,7 @@ pub async fn start(
 #[poise::command(
     slash_command,
     category = "Control",
+    default_member_permissions = "ADMINISTRATOR",
     required_permissions = "ADMINISTRATOR"
 )]
 /// end the game.

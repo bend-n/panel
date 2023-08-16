@@ -30,7 +30,7 @@ serenity = { version = "0.11.5", features = [
   "gateway",
 ], default-features = false }
 poise = "0.5.5"
-anyhow = "1.0.71"
+anyhow = "=1.0.72"
 regex = { version = "1.8.4", features = ["std"], default-features = false }
 minify-js = "0.5.6"
 itertools = "0.10.5"

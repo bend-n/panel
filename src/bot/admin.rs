@@ -2,7 +2,13 @@ use super::{Context, Result};
 use crate::bot::player::{self, Players};
 use crate::send_ctx;
 
-#[poise::command(slash_command, category = "Configuration", rename = "add_admin")]
+#[poise::command(
+    slash_command,
+    category = "Configuration",
+    rename = "add_admin",
+    required_permissions = "ADMINISTRATOR",
+    default_member_permissions = "ADMINISTRATOR"
+)]
 /// make somebody a admin
 pub async fn add(
     ctx: Context<'_>,
@@ -18,7 +24,13 @@ pub async fn add(
     Ok(())
 }
 
-#[poise::command(slash_command, category = "Configuration", rename = "remove_admin")]
+#[poise::command(
+    slash_command,
+    category = "Configuration",
+    rename = "remove_admin",
+    required_permissions = "ADMINISTRATOR",
+    default_member_permissions = "ADMINISTRATOR"
+)]
 /// remove the admin status
 pub async fn remove(
     ctx: Context<'_>,
