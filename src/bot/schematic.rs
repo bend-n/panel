@@ -1,6 +1,6 @@
 use super::{strip_colors, Context, SUCCESS};
 use anyhow::{anyhow, Result};
-use mindus::data::{DataRead, DataWrite, Serializer};
+use mindus::data::{DataRead, DataWrite};
 use mindus::*;
 use oxipng::*;
 use poise::serenity_prelude::*;
@@ -11,7 +11,6 @@ use std::sync::LazyLock;
 
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"(```)?(\n)?([^`]+)(\n)?(```)?"#).unwrap());
-static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
 
 #[poise::command(context_menu_command = "Render schematic", category = "Info")]
 /// draw schematic.
@@ -21,10 +20,9 @@ pub async fn context_draw(ctx: Context<'_>, msg: Message) -> Result<()> {
     if let Some(a) = msg.attachments.get(0)
         && let Some(e) = Path::new(&a.filename).extension()
         && e == "msch" {
-            let mut ss = SchematicSerializer(&REG);
             let s = a.download().await?;
             let mut s = DataRead::new(&s);
-            let s = ss.deserialize(&mut s).map_err(|e| anyhow!("invalid schematic: {e} with file {}", a.filename))?;
+            let s = Schematic::deserialize(&mut s).map_err(|e| anyhow!("invalid schematic: {e} with file {}", a.filename))?;
             return send(&ctx, &s, false).await;
     }
     draw_impl(ctx, &msg.content, false).await
@@ -69,7 +67,7 @@ async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Res
     poise::send_reply(*ctx, |m| {
         if send_schematic {
             let mut out = DataWrite::default();
-            SchematicSerializer(&REG).serialize(&mut out, s).unwrap();
+            s.serialize(&mut out).unwrap();
             m.attachment(AttachmentType::Bytes {
                 data: Cow::Owned(out.consume()),
                 filename: "schem.msch".to_string(),
@@ -94,15 +92,13 @@ async fn send(ctx: &Context<'_>, s: &Schematic<'_>, send_schematic: bool) -> Res
 }
 
 async fn draw_impl(ctx: Context<'_>, msg: &str, send_schematic: bool) -> Result<()> {
-    let mut ss = SchematicSerializer(&REG);
     let schem_text = RE
         .captures(msg)
         .ok_or(anyhow!("couldnt find schematic"))?
         .get(3)
         .unwrap()
         .as_str();
-    let s = ss
-        .deserialize_base64(schem_text)
+    let s = Schematic::deserialize_base64(schem_text)
         .map_err(|e| anyhow!("schematic deserializatiion failed: {e}"))?;
     send(&ctx, &s, send_schematic).await
 }

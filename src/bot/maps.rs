@@ -5,10 +5,7 @@ use mindus::*;
 use oxipng::*;
 use poise::serenity_prelude::*;
 use std::borrow::Cow;
-use std::sync::{
-    atomic::{AtomicU64, Ordering::Relaxed},
-    LazyLock,
-};
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::broadcast::{self, Sender};
 use tokio::sync::{MutexGuard, OnceCell};
@@ -101,8 +98,7 @@ impl MapImage {
                 // parsing the thing doesnt negate the need for a env var sooo
                 let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
                 let then = Instant::now();
-                static REG: LazyLock<mindus::block::BlockRegistry> = LazyLock::new(build_registry);
-                let m = MapSerializer(&REG).deserialize(&mut mindus::data::DataRead::new(&o))?;
+                let m = Map::deserialize(&mut mindus::data::DataRead::new(&o))?;
                 let deser_took = then.elapsed();
                 let name = m.tags.get("mapname").unwrap().to_owned();
                 let render_took = Instant::now();
@@ -158,7 +154,7 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
         })
         .embed(|e| {
             if let Some(RenderInfo { deserialization, render, compression, total, name }) = info {
-                e.footer(|f| f.text(format!("render of {name} took: {:.2}s (deser: {}ms, render: {:.2}s, compression: {:.2}s)", total.as_secs_f32(), deserialization.as_millis(), render.as_secs_f32(), compression.as_secs_f32())));
+                e.footer(|f| f.text(format!("render of {name} took: {:.3}s (deser: {}ms, render: {:.3}s, compression: {:.3}s)", total.as_secs_f32(), deserialization.as_millis(), render.as_secs_f32(), compression.as_secs_f32())));
             }
             e.attachment("0.png").color(SUCCESS)
         })

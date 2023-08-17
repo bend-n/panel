@@ -87,7 +87,10 @@ impl<'a> Webhook<'a> {
                         .is_ok()
                     {
                         input!("{m} < skipped");
-                        self.skipped.send(m).unwrap();
+                        match self.skipped.send(m) {
+                            Err(e) => eprintln!("err skipping: {e}"),
+                            Ok(_) => {}
+                        };
                         continue;
                     }
                     for line in m.lines() {
@@ -106,8 +109,6 @@ impl<'a> Webhook<'a> {
         let mut current: Option<String> = None;
         let mut message: Option<String> = None;
         let mut unnamed: Option<String> = None;
-
-        // this code is very game dependent
         for line in feed {
             let line: String = Style::fix(line);
             if let Some((name, msg)) = Style::split(&line) {
