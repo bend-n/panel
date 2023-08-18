@@ -8,7 +8,7 @@ use std::sync::{
     Arc, LazyLock,
 };
 use tokio::sync::broadcast::{self, error::TryRecvError};
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{sleep, Duration};
 
 pub struct Webhook<'a> {
     pub skipped: broadcast::Sender<String>,
@@ -52,33 +52,19 @@ impl<'a> Webhook<'a> {
     }
 
     async fn send_message(&self, username: &str, content: &str) {
+        define_print!("webhook");
+        output!("{username}: {content}");
         self.send(|m| m.username(username).content(content)).await;
     }
 
     pub async fn link(&mut self, mut stdout: broadcast::Receiver<String>) {
         define_print!("webhook");
-        let mut last: Option<Instant> = None;
-        let mut feed: Vec<String> = vec![];
         loop {
             let out = stdout.try_recv();
-            let now = Instant::now();
             match out {
                 Err(e) => match e {
                     TryRecvError::Closed => fail!("closed"),
-                    TryRecvError::Lagged(_) => continue,
-                    TryRecvError::Empty => {
-                        if let Some(earlier) = last {
-                            let since = now.duration_since(earlier).as_secs();
-                            if since > 1 || feed.len() > 15 {
-                                last.take();
-                                self.flush::<MindustryStyle>(feed).await;
-                                feed = vec![];
-                                flush!();
-                            }
-                        }
-                        sleep(Duration::from_millis(20)).await;
-                        continue;
-                    }
+                    _ => sleep(Duration::from_millis(20)).await,
                 },
                 Ok(m) => {
                     if self
@@ -94,108 +80,86 @@ impl<'a> Webhook<'a> {
                         continue;
                     }
                     for line in m.lines() {
-                        let line = line.to_string();
-                        input!("{line}");
-                        feed.push(line);
+                        self.push(line).await;
                     }
-                    last = Some(now);
                 }
             }
             sleep(Duration::from_millis(20)).await;
         }
     }
 
-    pub async fn flush<Style: OutputStyle>(&self, feed: Vec<String>) {
-        let mut current: Option<String> = None;
-        let mut message: Option<String> = None;
-        let mut unnamed: Option<String> = None;
-        for line in feed {
-            let line: String = Style::fix(line);
-            if let Some((name, msg)) = Style::split(&line) {
-                if let Some(n) = current.as_ref() {
-                    if n == &name {
-                        message.madd_panic(&msg);
-                        continue;
-                    }
-                    let message = message.take().unwrap();
-                    self.send_message(n, &message).await;
-                    current.take();
-                }
-                current = Some(name.to_owned());
-                message = Some(msg.to_owned());
-                // interrupt
-                if let Some(msg) = unnamed.take() {
-                    self.send_message("server", &msg).await;
-                }
-                continue;
+    pub async fn push(&self, msg: &str) {
+        match get(msg) {
+            Some(Message::Chat { player, content }) => {
+                self.send_message(&player, &content).await;
             }
-            unnamed.madd(unify(&line));
-        }
-        // finish
-        if let Some(n) = current.as_ref() {
-            let message = message.take().unwrap();
-            self.send_message(n, &message).await;
-        }
-        if let Some(msg) = unnamed.as_ref() {
-            self.send_message("server", msg).await;
+            Some(Message::Join { player }) => {
+                self.send_message(&player, "<has joined the game>").await;
+            }
+            Some(Message::Left { player }) => {
+                self.send_message(&player, "<has left the game>").await;
+            }
+            Some(Message::Load { map }) => {
+                self.send_message("server", &format!("loading map {map}"))
+                    .await;
+            }
+            _ => return,
         }
     }
 }
 
-/// functions ordered by call order
-pub trait OutputStyle {
-    /// first step
-    fn fix(raw_line: String) -> String {
-        raw_line
+#[derive(PartialEq, Debug, Clone)]
+pub enum Message {
+    Join { player: String },
+    Left { player: String },
+    Chat { player: String, content: String },
+    Load { map: String },
+}
+
+fn get(line: &str) -> Option<Message> {
+    macro_rules! s {
+        ($line: expr, $($e:expr),+ $(,)?) => {
+            $(
+                $line.starts_with($e) ||
+            )+ false
+        };
     }
-    /// get the user and the content (none for no user)
-    fn split(line: &str) -> Option<(String, String)>;
-}
+    if s!(line, [' ', '\t'], "at", "Lost command socket connection") {
+        return None;
+    }
 
-macro_rules! s {
-    ($line:expr, $e:ident) => {
-        $line.starts_with(stringify!($e))
-    };
-    ($line:expr, $e:expr) => {
-        $line.starts_with($e)
-    };
-}
+    static HAS_UUID: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"[a-zA-Z0-9+/]{22}==").unwrap());
 
-macro_rules! tern {
-    ($predicate:expr, $true: expr, $false: expr) => {{
-        if $predicate {
-            $true
+    if let Some((u, c)) = line.split(": ").map(unify).collect_tuple() {
+        let u = u.trim_start_matches('<');
+        let c = c.trim_end_matches('>');
+        if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c)) {
+            return Some(Message::Chat {
+                player: u.to_owned(),
+                content: c.to_owned(),
+            });
+        }
+    }
+
+    static JOINAGE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]{22}==)\]").unwrap()
+    });
+    if let Some(captures) = JOINAGE.captures(line) {
+        let player = unify(captures.get(1).unwrap().as_str());
+        return Some(if captures.get(2).is_some() {
+            Message::Left { player }
         } else {
-            $false
-        }
-    }};
-}
-pub struct MindustryStyle;
-impl OutputStyle for MindustryStyle {
-    fn split(line: &str) -> Option<(String, String)> {
-        if s!(line, [' ', '\t']) || s!(line, "at") || s!(line, "Lost command socket connection") {
-            return None;
-        }
-
-        if let Some((u, c)) = line.split(": ").map(unify).collect_tuple() {
-            let u = u.trim_start_matches('<');
-            let c = c.trim_end_matches('>');
-            if !(u.is_empty() || c.is_empty()) {
-                return Some((u.to_owned(), c.to_owned()));
-            }
-        }
-
-        static REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]+==)\]").unwrap()
+            Message::Join { player }
         });
-        if let Some(captures) = REGEX.captures(line) {
-            let player = unify(captures.get(1).unwrap().as_str());
-            let prefix = tern!(captures.get(2).is_some(), "left", "joined");
-            let uuid = captures.get(3).unwrap().as_str();
-            return Some((player, format!("{prefix} ({uuid})")));
-        }
-        None
     }
+    static MAP_LOAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Loading map (.+)").unwrap());
+    if let Some(captures) = MAP_LOAD.captures(line) {
+        return Some(Message::Load {
+            map: captures.get(1).unwrap().as_str().to_string(),
+        });
+    }
+    None
 }
 
 pub fn unify(s: &str) -> String {
@@ -226,32 +190,55 @@ impl Madd for Option<String> {
 #[test]
 fn style() {
     macro_rules! test_line {
-        ($line:expr) => {
-            let line = $line.to_string(); // no fixing done!
-            let got = MindustryStyle::split(&line);
-            assert!(got == None, "got {got:?}, expected None");
+        ($line:literal) => {
+            let got = get($line);
+            assert_eq!(got, None);
         };
-        ($line:expr, $name: expr, $content: expr) => {
-            let line = $line.to_string();
-            let got = MindustryStyle::split(&line);
-            assert!(
-                got == Some(($name.into(), $content.into())),
-                "got {got:?}, expected ({}, {})",
-                $name,
-                $content
-            );
+        ($line:literal, $what:expr) => {
+            let got = get($line);
+            assert_eq!(got, Some($what));
         };
     }
     //unnamed
     test_line!("undefined");
     test_line!("Lost command socket connection: localhost/127.0.0.1:6859");
     //named
-    test_line!("abc: hi", "abc", "hi");
-    test_line!("<a: /help>", "a", "/help");
-    test_line!("a has connected. [abc==]", "a", "joined (abc==)");
-    test_line!("a has disconnected. [abc==] (closed)", "a", "left (abc==)");
-    test_line!("a: :o", "a", ":o");
-    test_line!("a:b: :o", "a:b", ":o");
+    test_line!(
+        "abc: hi",
+        Message::Chat {
+            player: "abc".into(),
+            content: "hi".into()
+        }
+    );
+    test_line!(
+        "<a: /help>",
+        Message::Chat {
+            player: "a".into(),
+            content: "/help".into()
+        }
+    );
+    test_line!(
+        "a has connected. [+41521zhHB8321xAbXYedw==]",
+        Message::Join { player: "a".into() }
+    );
+    test_line!(
+        "a has disconnected. [+41521zhHB8321xAbXYedw==] (closed)",
+        Message::Left { player: "a".into() }
+    );
+    test_line!(
+        "a: :o",
+        Message::Chat {
+            player: "a".into(),
+            content: ":o".into()
+        }
+    );
+    test_line!(
+        "a:b: :o",
+        Message::Chat {
+            player: "a:b".into(),
+            content: ":o".into()
+        }
+    );
 }
 
 #[test]

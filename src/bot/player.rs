@@ -60,7 +60,7 @@ async fn get_players(stdin: &broadcast::Sender<String>) -> Result<Vec<Player>> {
         } else if line.is_empty() {
             continue;
         }
-        if let Some((first, uuid, ip)) = line.split('/').collect_tuple() {
+        if let Some((first, uuid, ip)) = line.split('|').collect_tuple() {
             if let Some((admin, name)) = first.split_once(' ') {
                 players.push(Player {
                     admin: admin == "[A]",
@@ -84,7 +84,7 @@ pub async fn autocomplete<'a>(
         .map(|p| p.name)
 }
 
-#[poise::command(slash_command, prefix_command, category = "Info", rename = "players")]
+#[poise::command(slash_command, category = "Info", rename = "players")]
 /// lists the currently online players.
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer().await;

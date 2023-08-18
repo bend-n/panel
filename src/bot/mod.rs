@@ -64,6 +64,8 @@ impl Bot {
                     say(),
                     bans::add(),
                     bans::remove(),
+                    bans::add_raw(),
+                    bans::kick(),
                     admin::add(),
                     admin::remove(),
                     js::run(),
@@ -84,7 +86,7 @@ impl Bot {
                 on_error: |e| Box::pin(on_error(e)),
                 prefix_options: poise::PrefixFrameworkOptions {
                     edit_tracker: Some(poise::EditTracker::for_timespan(
-                        std::time::Duration::from_secs(2 * 60),
+                        std::time::Duration::from_secs(5 * 60),
                     )),
                     prefix: Some(PFX.to_string()),
                     ..Default::default()
@@ -104,10 +106,11 @@ impl Bot {
                     // todo: voting::fixall() auto
                 })
             });
-
         tokio::spawn(async move {
             let http = Http::new("");
-            let mut wh = Webhook::new(&http, &std::env::var("WEBHOOK").expect("no webhook!")).await;
+            let wh = std::env::var("WEBHOOK")
+                .unwrap_or(read_to_string("webhook").expect("wher webhook"));
+            let mut wh = Webhook::new(&http, &wh).await;
             SKIPPING.get_or_init(|| (wh.skip.clone(), wh.skipped.clone()));
             wh.link(stdout).await;
         });
@@ -209,7 +212,7 @@ async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Re
     return_next!(ctx)
 }
 
-fn strip_colors(from: &str) -> String {
+pub fn strip_colors(from: &str) -> String {
     let mut result = String::new();
     result.reserve(from.len());
     let mut level: u8 = 0;
