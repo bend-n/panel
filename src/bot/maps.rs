@@ -87,7 +87,7 @@ impl MapImage {
         Ok(
             if self
                 .1
-                .fetch_update(Relaxed, Relaxed, |then| (now > then + 70).then(|| now))
+                .fetch_update(Relaxed, Relaxed, |then| (now > then + 70).then_some(now))
                 .is_err()
             {
                 (lock, None)

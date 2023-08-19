@@ -101,8 +101,7 @@ macro_rules! votes {
 
 impl VoteData {
     pub fn summarize(&mut self, ctx: &Context<'_>, optcount: usize) -> Vec<usize> {
-        let mut ret = vec![];
-        ret.resize(optcount, 0);
+        let mut ret = vec![0; optcount];
         let mut v;
         for v in votes!(*self, ctx, v).values() {
             ret[*v] += 1;

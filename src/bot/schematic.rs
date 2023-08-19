@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::LazyLock;
 
 static RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(```)?(\n)?([^`]+)(\n)?(```)?"#).unwrap());
+    LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
 
 #[poise::command(context_menu_command = "Render schematic", category = "Info")]
 /// draw schematic.

@@ -102,7 +102,7 @@ impl<'a> Webhook<'a> {
                 self.send_message("server", &format!("loading map {map}"))
                     .await;
             }
-            _ => return,
+            _ => (),
         }
     }
 }

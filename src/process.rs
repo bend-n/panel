@@ -50,7 +50,7 @@ impl Process {
                     },
                     Ok(mut s) => {
                         input!("{s}");
-                        s.push_str("\n");
+                        s.push('\n');
                         self.inner.write_all(s.as_bytes()).await.unwrap();
                         self.inner.flush().await.unwrap();
                     }

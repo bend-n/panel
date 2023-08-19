@@ -92,7 +92,7 @@ impl Bot {
                             poise::Event::Message { new_message } => {
                                 if [1142100900442296441, 1003092765581787279]
                                     .contains(new_message.channel_id.as_u64())
-                                    && !new_message.content.starts_with("!")
+                                    && !new_message.content.starts_with('!')
                                     && !new_message.content.starts_with(PFX)
                                     && !new_message.author.bot
                                 {
@@ -103,7 +103,7 @@ impl Bot {
                                             .author_nick(&c.http)
                                             .await
                                             .unwrap_or_else(|| new_message.author.name.clone()),
-                                        new_message.content_safe(&c.cache).replace("\n", "; ")
+                                        new_message.content_safe(&c.cache).replace('\n', "; ")
                                     )
                                     .is_err()
                                     {
