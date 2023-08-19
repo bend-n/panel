@@ -82,23 +82,23 @@ impl Server {
         });
         let stdout = state.stdout.clone();
         tokio::spawn(async move {
+            let mut process_handle: Option<JoinHandle<()>> = None;
+            let mut backoff = 1u64;
             macro_rules! backoff {
-                ($backoff:expr) => {
-                    $backoff <<= 1;
-                    println!("process died; waiting {}s", $backoff);
-                    sleep(Duration::from_secs($backoff)).await;
+                () => {
+                    backoff <<= 1;
+                    sleep(Duration::from_secs(backoff)).await;
                     continue;
                 };
             }
-            let mut process_handle: Option<JoinHandle<()>> = None;
-            let mut backoff = 1u64;
             loop {
                 if let Some(h) = process_handle {
                     let _ = h.await;
                     process_handle = None;
+                    println!("process died; waiting {}s", backoff << 2);
                 }
                 let Ok(spawn) = Process::spawn().await else {
-                    backoff!(backoff);
+                    backoff!();
                 };
                 process_handle = Some(
                     spawn
@@ -109,7 +109,7 @@ impl Server {
                 if backoff == 1 {
                     continue;
                 }
-                backoff!(backoff);
+                backoff!();
             }
         });
         Bot::spawn(state.stdout.subscribe(), state.stdin.clone()).await;

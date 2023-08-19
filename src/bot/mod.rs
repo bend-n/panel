@@ -45,7 +45,7 @@ macro_rules! send_ctx {
 }
 
 #[cfg(not(debug_assertions))]
-const PFX: &'static str = ">";
+const PFX: &str = ">";
 #[cfg(debug_assertions)]
 const PFX: &str = "-";
 
@@ -56,12 +56,12 @@ const DISABLED: (u8, u8, u8) = (112, 128, 144);
 pub struct Bot;
 impl Bot {
     pub async fn spawn(stdout: broadcast::Receiver<String>, stdin: broadcast::Sender<String>) {
+        println!("bot startup");
         let tok = std::env::var("TOKEN").unwrap_or(read_to_string("token").expect("wher token"));
         let f: poise::FrameworkBuilder<Data, anyhow::Error> = poise::Framework::builder()
             .options(poise::FrameworkOptions {
                 commands: vec![
                     raw(),
-                    say(),
                     bans::add(),
                     bans::remove(),
                     bans::add_raw(),
@@ -83,10 +83,53 @@ impl Bot {
                     end(),
                     help(),
                 ],
+                event_handler: |c, e, _, d| {
+                    Box::pin(async move {
+                        match e {
+                            poise::Event::Ready { .. } => {
+                                println!("bot ready");
+                            }
+                            poise::Event::Message { new_message } => {
+                                if [1142100900442296441, 1003092765581787279]
+                                    .contains(new_message.channel_id.as_u64())
+                                    && !new_message.content.starts_with("!")
+                                    && !new_message.content.starts_with(PFX)
+                                    && !new_message.author.bot
+                                {
+                                    if send!(
+                                        d.stdin,
+                                        "say [royal][] [scarlet][[{}]:[] {}",
+                                        new_message
+                                            .author_nick(&c.http)
+                                            .await
+                                            .unwrap_or_else(|| new_message.author.name.clone()),
+                                        new_message.content_safe(&c.cache).replace("\n", "; ")
+                                    )
+                                    .is_err()
+                                    {
+                                        return Ok(());
+                                    };
+                                    new_message
+                                        .react(
+                                            &c.http,
+                                            c.http
+                                                .get_emoji(1003092764919091282, 1142290560275718194)
+                                                .await
+                                                .unwrap(),
+                                        )
+                                        .await
+                                        .unwrap();
+                                }
+                            }
+                            _ => {}
+                        };
+                        Ok(())
+                    })
+                },
                 on_error: |e| Box::pin(on_error(e)),
                 prefix_options: poise::PrefixFrameworkOptions {
                     edit_tracker: Some(poise::EditTracker::for_timespan(
-                        std::time::Duration::from_secs(5 * 60),
+                        std::time::Duration::from_secs(2 * 60),
                     )),
                     prefix: Some(PFX.to_string()),
                     ..Default::default()
@@ -94,9 +137,10 @@ impl Bot {
                 ..Default::default()
             })
             .token(tok)
-            .intents(GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT)
+            .intents(GatewayIntents::all())
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
+                    println!("registering");
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     println!("registered");
                     Ok(Data {
@@ -130,8 +174,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
                 msg = format!("e: `{}`", chain.next().unwrap());
                 for mut source in chain {
                     write!(msg, "from: `{source}`").unwrap();
-                    loop {
-                        let Some(next) = source.source() else { break };
+                    while let Some(next) = source.source() {
                         write!(msg, "from: `{next}`").unwrap();
                         source = next;
                     }
@@ -198,18 +241,6 @@ async fn get_nextblock() -> String {
         .recv()
         .await
         .unwrap_or("._?".to_string())
-}
-
-#[poise::command(
-    slash_command,
-    category = "Control",
-    default_member_permissions = "ADMINISTRATOR",
-    required_permissions = "ADMINISTRATOR"
-)]
-/// say something as the server
-async fn say(ctx: Context<'_>, #[description = "Message"] message: String) -> Result<()> {
-    ctx.data().stdin.send(format!("say {message}"))?;
-    return_next!(ctx)
 }
 
 pub fn strip_colors(from: &str) -> String {

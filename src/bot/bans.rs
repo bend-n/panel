@@ -51,7 +51,7 @@ pub async fn kick(
 #[poise::command(
     slash_command,
     category = "Control",
-    rename = "ban",
+    rename = "ban_raw",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR"
 )]

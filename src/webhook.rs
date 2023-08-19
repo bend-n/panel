@@ -64,7 +64,7 @@ impl<'a> Webhook<'a> {
             match out {
                 Err(e) => match e {
                     TryRecvError::Closed => fail!("closed"),
-                    _ => sleep(Duration::from_millis(20)).await,
+                    _ => sleep(Duration::from_millis(100)).await,
                 },
                 Ok(m) => {
                     if self
@@ -73,10 +73,9 @@ impl<'a> Webhook<'a> {
                         .is_ok()
                     {
                         input!("{m} < skipped");
-                        match self.skipped.send(m) {
-                            Err(e) => eprintln!("err skipping: {e}"),
-                            Ok(_) => {}
-                        };
+                        if let Err(e) = self.skipped.send(m) {
+                            eprintln!("err skipping: {e}");
+                        }
                         continue;
                     }
                     for line in m.lines() {
@@ -84,7 +83,7 @@ impl<'a> Webhook<'a> {
                     }
                 }
             }
-            sleep(Duration::from_millis(20)).await;
+            sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -134,7 +133,7 @@ fn get(line: &str) -> Option<Message> {
     if let Some((u, c)) = line.split(": ").map(unify).collect_tuple() {
         let u = u.trim_start_matches('<');
         let c = c.trim_end_matches('>');
-        if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c)) {
+        if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c) || HAS_UUID.is_match(u)) {
             return Some(Message::Chat {
                 player: u.to_owned(),
                 content: c.to_owned(),
