@@ -45,7 +45,7 @@ pub async fn autocomplete<'a>(
         .map(ToString::to_string)
 }
 
-#[poise::command(slash_command, prefix_command, category = "Info", rename = "maps")]
+#[poise::command(slash_command, category = "Info", rename = "maps")]
 /// lists the maps.
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
@@ -142,7 +142,7 @@ impl MapImage {
     }
 }
 
-#[poise::command(slash_command, prefix_command, category = "Info")]
+#[poise::command(slash_command, category = "Info")]
 /// look at the current game.
 pub async fn view(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;

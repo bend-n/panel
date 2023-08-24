@@ -33,7 +33,8 @@ fn parse_js(from: &str) -> Result<String> {
     required_permissions = "ADMINISTRATOR",
     category = "Control",
     track_edits,
-    rename = "js"
+    rename = "js",
+    check = "crate::bot::in_guild"
 )]
 /// run arbitrary javascript
 pub async fn run(

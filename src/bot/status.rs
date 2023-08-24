@@ -51,7 +51,7 @@ pub fn humanize_bytes<T: Into<Size>>(bytes: T) -> String {
     [&result, SUFFIX[base.floor() as usize]].join(" ")
 }
 
-#[poise::command(prefix_command, slash_command, category = "Info", rename = "status")]
+#[poise::command(slash_command, category = "Info", rename = "status")]
 /// server status.
 pub async fn command(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;

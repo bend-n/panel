@@ -12,7 +12,9 @@ use crate::webhook::Webhook;
 use anyhow::Result;
 use maps::Maps;
 
+use poise::serenity_prelude::GuildId;
 use serenity::http::Http;
+use serenity::model::channel::Message;
 use serenity::prelude::*;
 use std::fmt::Write;
 use std::fs::read_to_string;
@@ -44,14 +46,75 @@ macro_rules! send_ctx {
     };
 }
 
-#[cfg(not(debug_assertions))]
+const SOURCE_GUILD: u64 = 1003092764919091282;
+const ARROW_EMOJI: u64 = 1142290560275718194;
 const PFX: &str = ">";
 #[cfg(debug_assertions)]
-const PFX: &str = "-";
+const GUILD: u64 = SOURCE_GUILD;
+#[cfg(debug_assertions)]
+const CHANNEL: u64 = 1003092765581787279;
+#[cfg(not(debug_assertions))]
+const GUILD: u64 = 1110086242177142854;
+#[cfg(not(debug_assertions))]
+const CHANNEL: u64 = 1142100900442296441;
 
 const SUCCESS: (u8, u8, u8) = (34, 139, 34);
 const FAIL: (u8, u8, u8) = (255, 69, 0);
 const DISABLED: (u8, u8, u8) = (112, 128, 144);
+
+pub async fn in_guild(ctx: Context<'_>) -> Result<bool> {
+    Ok(ctx.guild_id().map_or(false, |i| i.0 == GUILD))
+}
+
+pub async fn safe(m: &Message, c: &serenity::client::Context) -> String {
+    let mut result = m.content.clone();
+
+    for u in &m.mentions {
+        let mut at_distinct = String::with_capacity(33);
+        at_distinct.push('@');
+        at_distinct.push_str(&u.nick_in(c, GuildId(GUILD)).await.unwrap_or(u.name.clone()));
+
+        let mut m = u.mention().to_string();
+        if !result.contains(&m) {
+            m.insert(2, '!');
+        }
+        result = result.replace(&m, &at_distinct);
+    }
+
+    for id in &m.mention_roles {
+        let mention = id.mention().to_string();
+
+        if let Some(role) = id.to_role_cached(&c) {
+            result = result.replace(&mention, &["@", &role.name].concat());
+        } else {
+            result = result.replace(&mention, "@deleted-role");
+        }
+    }
+    result
+}
+
+pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result<()> {
+    let n = m
+        .author_nick(&c.http)
+        .await
+        .unwrap_or_else(|| m.author.name.replace("ggfenguin", "eris"));
+    for l in safe(m, c).await.lines() {
+        if send!(
+            d.stdin,
+            "say [royal] [coral][[[scarlet]{n}[coral]]:[white] {l}"
+        )
+        .is_err()
+        {
+            return Ok(());
+        };
+    }
+    m.react(
+        &c.http,
+        c.http.get_emoji(SOURCE_GUILD, ARROW_EMOJI).await.unwrap(),
+    )
+    .await?;
+    Ok(())
+}
 
 pub struct Bot;
 impl Bot {
@@ -77,8 +140,6 @@ impl Bot {
                     voting::create(),
                     voting::fixall(),
                     voting::list(),
-                    schematic::draw(),
-                    schematic::context_draw(),
                     start(),
                     end(),
                     help(),
@@ -90,35 +151,17 @@ impl Bot {
                                 println!("bot ready");
                             }
                             poise::Event::Message { new_message } => {
-                                if [1142100900442296441, 1003092765581787279]
-                                    .contains(new_message.channel_id.as_u64())
-                                    && !new_message.content.starts_with('!')
-                                    && !new_message.content.starts_with(PFX)
-                                    && !new_message.author.bot
+                                if new_message.content.starts_with('!')
+                                    || new_message.content.starts_with(PFX)
+                                    || new_message.author.bot
                                 {
-                                    if send!(
-                                        d.stdin,
-                                        "say [royal][] [scarlet][[{}]:[] {}",
-                                        new_message
-                                            .author_nick(&c.http)
-                                            .await
-                                            .unwrap_or_else(|| new_message.author.name.clone()),
-                                        new_message.content_safe(&c.cache).replace('\n', "; ")
-                                    )
-                                    .is_err()
-                                    {
-                                        return Ok(());
-                                    };
-                                    new_message
-                                        .react(
-                                            &c.http,
-                                            c.http
-                                                .get_emoji(1003092764919091282, 1142290560275718194)
-                                                .await
-                                                .unwrap(),
-                                        )
-                                        .await
-                                        .unwrap();
+                                    return Ok(());
+                                }
+                                if schematic::with(new_message, c).await?.is_break() {
+                                    return Ok(());
+                                }
+                                if CHANNEL == new_message.channel_id.0 {
+                                    say(c, new_message, d).await?;
                                 }
                             }
                             _ => {}
@@ -141,7 +184,14 @@ impl Bot {
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
                     println!("registering");
-                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                    poise::builtins::register_in_guild(
+                        ctx,
+                        &framework.options().commands[..18],
+                        GuildId(GUILD),
+                    )
+                    .await?;
+                    poise::builtins::register_globally(ctx, &framework.options().commands[18..])
+                        .await?;
                     println!("registered");
                     Ok(Data {
                         stdin,
@@ -206,6 +256,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
 
 #[poise::command(
     prefix_command,
+    check = "crate::bot::in_guild",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
     category = "Control",
@@ -305,14 +356,18 @@ pub async fn help(
     #[autocomplete = "poise::builtins::autocomplete_command"]
     command: Option<String>,
 ) -> Result<()> {
-    poise::builtins::help(
-        ctx,
-        command.as_deref(),
-        poise::builtins::HelpConfiguration {
-            extra_text_at_bottom: "Mindustry server management bot",
-            ..Default::default()
-        },
-    )
-    .await?;
+    if in_guild(ctx).await.unwrap() {
+        poise::builtins::help(
+            ctx,
+            command.as_deref(),
+            poise::builtins::HelpConfiguration {
+                extra_text_at_bottom: "Mindustry server management bot",
+                ..Default::default()
+            },
+        )
+        .await?;
+    } else {
+        ctx.say(include_str!("usage.md")).await?;
+    }
     Ok(())
 }

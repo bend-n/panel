@@ -556,7 +556,7 @@ pub async fn fixall(ctx: Context<'_>) -> Result<()> {
 
 // voters
 
-#[poise::command(prefix_command, slash_command, category = "Discord", rename = "votes")]
+#[poise::command(slash_command, category = "Discord", rename = "votes")]
 pub async fn list(ctx: Context<'_>, #[description = "the vote title"] vote: String) -> Result<()> {
     let vd = {
         let buf = ctx.data().vote_data.lock().unwrap();
