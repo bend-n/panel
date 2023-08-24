@@ -12,12 +12,21 @@ use super::{strip_colors, SUCCESS};
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
 
-pub async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic<'_>>> {
+async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic<'_>>> {
     for a in attchments {
         if a.filename.ends_with("msch") {
             let s = a.download().await?;
             let mut s = DataRead::new(&s);
             let Ok(s) = Schematic::deserialize(&mut s) else {
+                continue;
+            };
+            return Ok(Some(s));
+        // discord uploads base64 as a file when its too long
+        } else if a.filename == "message.txt" {
+            let Ok(s) = String::from_utf8(a.download().await?) else {
+                continue;
+            };
+            let Ok(s) = Schematic::deserialize_base64(&s) else {
                 continue;
             };
             return Ok(Some(s));
@@ -84,7 +93,7 @@ pub fn to_png(s: &Schematic<'_>) -> Vec<u8> {
     .unwrap()
 }
 
-pub fn from_msg<'l>(msg: &str) -> Result<Schematic<'l>> {
+fn from_msg<'l>(msg: &str) -> Result<Schematic<'l>> {
     let schem_text = RE
         .captures(msg)
         .ok_or(anyhow!("couldnt find schematic"))?
