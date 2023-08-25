@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 use std::{borrow::Cow, ops::ControlFlow};
 
-use super::{strip_colors, SUCCESS};
+use super::{emojis, strip_colors, SUCCESS};
 
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
@@ -50,6 +50,15 @@ pub async fn with(m: &Message, c: &serenity::client::Context) -> Result<ControlF
                     if let Some(d) = v.tags.get("description") {
                         e.description(d);
                     }
+                    let mut s = String::new();
+                    for (i, n) in v.compute_total_cost().0.iter() {
+                        if n == 0 {
+                            continue;
+                        }
+                        use std::fmt::Write;
+                        write!(s, "{} {n} ", emojis::item(i)).unwrap();
+                    }
+                    e.field("", s, true);
                     e.title(strip_colors(v.tags.get("name").unwrap()))
                         .footer(|f| f.text(format!("requested by {author}",)))
                         .color(SUCCESS)

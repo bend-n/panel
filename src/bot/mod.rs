@@ -45,9 +45,94 @@ macro_rules! send_ctx {
         $e.data().stdin.send(format!($fmt $(, $args)*))
     };
 }
+pub const SOURCE_GUILD: u64 = 1003092764919091282;
+pub mod emojis {
+    use super::SOURCE_GUILD;
+    use mindus::item::Type as Item;
+    use poise::serenity_prelude::Emoji;
+    use serenity::http::client::Http;
+    use std::sync::OnceLock;
 
-const SOURCE_GUILD: u64 = 1003092764919091282;
-const ARROW_EMOJI: u64 = 1142290560275718194;
+    macro_rules! create {
+        ($($i: ident),+ $(,)?) => { paste::paste! {
+            $(pub static $i: OnceLock<Emoji> = OnceLock::new();)+
+
+            pub async fn load(c: &Http) {
+                let all = c.get_emojis(SOURCE_GUILD).await.unwrap();
+                for e in all {
+                    match e.name.as_str() {
+                        $(stringify!([< $i:lower >])=>{let _=$i.get_or_init(||e);},)+
+                        _ => { /*println!("{n} unused");*/ }
+                    }
+                }
+                $(
+                    $i.get().expect(&format!("{} should be loaded", stringify!($i)));
+                )+
+            }
+        } };
+    }
+    create![
+        ARROW,
+        COPPER,
+        GRAPHITE,
+        LEAD,
+        SILICON,
+        TITANIUM,
+        SAND,
+        COAL,
+        PYRATITE,
+        PLASTANIUM,
+        SCRAP,
+        SPOREPOD,
+        THORIUM,
+        SURGEALLOY,
+        TUNGSTEN,
+        PHASEFABRIC,
+        OXIDE,
+        METAGLASS,
+        FISSILEMATTER,
+        DORMANTCYST,
+        CARBIDE,
+        BLASTCOMPOUND,
+        BERYLLIUM
+    ];
+
+    macro_rules! get {
+        ($e: ident) => {
+            crate::bot::emojis::$e.get().unwrap().clone()
+        };
+    }
+    pub(crate) use get;
+
+    pub fn item(i: Item) -> Emoji {
+        use Item::*;
+        // exec() when
+        match i {
+            Copper => get!(COPPER),
+            Lead => get!(LEAD),
+            Metaglass => get!(METAGLASS),
+            Graphite => get!(GRAPHITE),
+            Sand => get!(SAND),
+            Coal => get!(COAL),
+            Titanium => get!(TITANIUM),
+            Thorium => get!(THORIUM),
+            Scrap => get!(SCRAP),
+            Silicon => get!(SILICON),
+            Plastanium => get!(PLASTANIUM),
+            PhaseFabric => get!(PHASEFABRIC),
+            SurgeAlloy => get!(SURGEALLOY),
+            SporePod => get!(SPOREPOD),
+            BlastCompound => get!(BLASTCOMPOUND),
+            Pyratite => get!(PYRATITE),
+            Beryllium => get!(BERYLLIUM),
+            Tungsten => get!(TUNGSTEN),
+            Oxide => get!(OXIDE),
+            Carbide => get!(CARBIDE),
+            FissileMatter => get!(FISSILEMATTER),
+            DormantCyst => get!(DORMANTCYST),
+        }
+    }
+}
 const PFX: &str = ">";
 #[cfg(debug_assertions)]
 const GUILD: u64 = SOURCE_GUILD;
@@ -108,11 +193,7 @@ pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result
             return Ok(());
         };
     }
-    m.react(
-        &c.http,
-        c.http.get_emoji(SOURCE_GUILD, ARROW_EMOJI).await.unwrap(),
-    )
-    .await?;
+    m.react(&c.http, emojis::get!(ARROW)).await?;
     Ok(())
 }
 
@@ -149,6 +230,7 @@ impl Bot {
                         match e {
                             poise::Event::Ready { .. } => {
                                 println!("bot ready");
+                                emojis::load(&c.http).await;
                             }
                             poise::Event::Message { new_message } => {
                                 if new_message.content.starts_with('!')
@@ -183,7 +265,6 @@ impl Bot {
             .intents(GatewayIntents::all())
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
-                    println!("registering");
                     poise::builtins::register_in_guild(
                         ctx,
                         &framework.options().commands[..18],
