@@ -43,6 +43,7 @@ btparse = "0.1.1"
 mindus = { version = "4", features = [], default-features = false }
 oxipng = { git = "https://github.com/shssoichiro/oxipng", branch = "master", features = [], default-features = false }
 strip-ansi-escapes = "0.2.0"
+dashmap = "5.5.1"
 
 [profile.release]
 strip = true

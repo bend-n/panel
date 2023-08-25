@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 use std::{borrow::Cow, ops::ControlFlow};
 
-use super::{emojis, strip_colors, SUCCESS};
+use super::{emojis, strip_colors, SMsg, SUCCESS};
 
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
@@ -35,46 +35,47 @@ async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic<
     Ok(None)
 }
 
-pub async fn with(m: &Message, c: &serenity::client::Context) -> Result<ControlFlow<(), ()>> {
+pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<Message, ()>> {
+    let author = m.author;
     let send = |v| async move {
         let p = to_png(&v);
-        let author = m.author_nick(c).await.unwrap_or(m.author.name.clone());
-        m.channel_id
-            .send_message(c, |m| {
-                m.add_file(AttachmentType::Bytes {
-                    data: Cow::Owned(p),
-                    filename: "image.png".to_string(),
-                })
-                .embed(|e| {
-                    e.attachment("image.png");
-                    if let Some(d) = v.tags.get("description") {
-                        e.description(d);
-                    }
-                    let mut s = String::new();
-                    for (i, n) in v.compute_total_cost().0.iter() {
-                        if n == 0 {
-                            continue;
+        anyhow::Ok(
+            m.channel
+                .send_message(c, |m| {
+                    m.add_file(AttachmentType::Bytes {
+                        data: Cow::Owned(p),
+                        filename: "image.png".to_string(),
+                    })
+                    .embed(|e| {
+                        e.attachment("image.png");
+                        if let Some(d) = v.tags.get("description") {
+                            e.description(d);
                         }
-                        use std::fmt::Write;
-                        write!(s, "{} {n} ", emojis::item(i)).unwrap();
-                    }
-                    e.field("", s, true);
-                    e.title(strip_colors(v.tags.get("name").unwrap()))
-                        .footer(|f| f.text(format!("requested by {author}",)))
-                        .color(SUCCESS)
+                        let mut s = String::new();
+                        for (i, n) in v.compute_total_cost().0.iter() {
+                            if n == 0 {
+                                continue;
+                            }
+                            use std::fmt::Write;
+                            write!(s, "{} {n} ", emojis::item(i)).unwrap();
+                        }
+                        e.field("", s, true);
+                        e.title(strip_colors(v.tags.get("name").unwrap()))
+                            .footer(|f| f.text(format!("requested by {author}")))
+                            .color(SUCCESS)
+                    })
                 })
-            })
-            .await?;
-        anyhow::Ok(())
+                .await?,
+        )
     };
 
     if let Ok(Some(v)) = from_attachments(&m.attachments).await {
-        send(v).await?;
-        return Ok(ControlFlow::Break(()));
+        println!("sent {}", v.tags.get("name").unwrap());
+        return Ok(ControlFlow::Break(send(v).await?));
     }
     if let Ok(v) = from_msg(&m.content) {
-        send(v).await?;
-        return Ok(ControlFlow::Break(()));
+        println!("sent {}", v.tags.get("name").unwrap());
+        return Ok(ControlFlow::Break(send(v).await?));
     }
     Ok(ControlFlow::Continue(()))
 }
