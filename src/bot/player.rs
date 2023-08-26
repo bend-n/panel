@@ -3,7 +3,6 @@ use crate::send;
 use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
-use serenity::http::CacheHttp;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -89,12 +88,6 @@ pub async fn autocomplete<'a>(
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer().await;
     let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
-    let perms = ctx
-        .partial_guild()
-        .await
-        .unwrap()
-        .member_permissions(ctx.http(), ctx.author().id)
-        .await?;
     poise::send_reply(ctx, |m| {
         m.embed(|e| {
             if players.is_empty() {
@@ -102,17 +95,10 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
             }
             e.fields(players.into_iter().map(|p| {
                 let admins = if p.admin { " [A]" } else { "" };
-                (
-                    p.name,
-                    if perms.administrator() {
-                        format!("{id}, {ip}", id = p.uuid, ip = p.ip) + admins
-                    } else {
-                        admins.to_string()
-                    },
-                    true,
-                )
-            }));
-            e.description("currently online players.").color(SUCCESS)
+                (p.name, admins, true)
+            }))
+            .description("currently online players.")
+            .color(SUCCESS)
         })
     })
     .await?;
