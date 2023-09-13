@@ -89,7 +89,7 @@ pub fn to_png(s: &Schematic<'_>) -> Vec<u8> {
             transparent_color: None,
         },
         BitDepth::Eight,
-        p.buffer,
+        p.take_buffer(),
     )
     .unwrap();
     p.create_optimized_png(&oxipng::Options {

@@ -112,7 +112,7 @@ impl MapImage {
                         transparent_color: None,
                     },
                     BitDepth::Eight,
-                    i.buffer,
+                    i.take_buffer(),
                 )
                 .unwrap();
                 *lock = i

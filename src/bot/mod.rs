@@ -2,6 +2,7 @@ mod admin;
 mod bans;
 mod config;
 mod js;
+mod logic;
 pub mod maps;
 mod player;
 mod schematic;
@@ -234,6 +235,7 @@ impl Bot {
                     voting::list(),
                     start(),
                     end(),
+                    logic::run(),
                     help(),
                 ],
                 event_handler: |c, e, _, d| {
