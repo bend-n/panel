@@ -1,31 +1,20 @@
 use super::{Context, Result};
 use lemu::Executor;
-use poise::{serenity_prelude::AttachmentType, KeyValueArgs};
-use regex::Regex;
-use std::{borrow::Cow, sync::LazyLock};
+use poise::{serenity_prelude::AttachmentType, CodeBlock, KeyValueArgs};
+use std::borrow::Cow;
 
 #[poise::command(prefix_command, category = "Misc", track_edits, rename = "eval")]
 pub async fn run(
     ctx: Context<'_>,
     #[description = "number of iterations"] kv: KeyValueArgs,
-    #[rest]
-    #[description = "Script"]
-    from: String,
+    #[description = "Script"] block: CodeBlock,
 ) -> Result<()> {
     let _ = ctx.channel_id().start_typing(&ctx.serenity_context().http);
-
-    static RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"```(arm|x86asm)?([^`]+)```"#).unwrap());
-
     let lemu::Output {
         output: Some(output),
         displays,
         ..
     } = ({
-        let mat = RE
-            .captures(&from)
-            .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`arm...\`\`\`."#))?;
-        let script = mat.get(2).unwrap().as_str();
         match Executor::with_output(vec![])
             .display()
             .limit_iterations(
@@ -33,14 +22,14 @@ pub async fn run(
                     .map_or(1, |v| v.parse::<usize>().unwrap_or(1).clamp(1, 50)),
             )
             .limit_instructions(30000)
-            .program(&script)
+            .program(&block.code)
         {
             Ok(mut v) => {
                 v.run();
                 v.output()
             }
             Err(e) => {
-                let s = format!("{}", e.diagnose(script)).replace("`", "\u{200b}`");
+                let s = format!("{}", e.diagnose(&block.code)).replace("`", "\u{200b}`");
                 ctx.send(|c| {
                     c.allowed_mentions(|a| a.empty_parse())
                         .content(format!("```ansi\n{s}\n```"))
