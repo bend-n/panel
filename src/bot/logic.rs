@@ -14,8 +14,8 @@ pub async fn run(
         output: Some(output),
         displays,
         ..
-    } = ({
-        match Executor::with_output(vec![])
+    } = (match tokio::task::spawn_blocking(move || {
+        Executor::with_output(vec![])
             .display()
             .limit_iterations(
                 kv.get("iters")
@@ -23,20 +23,22 @@ pub async fn run(
             )
             .limit_instructions(30000)
             .program(&block.code)
-        {
-            Ok(mut v) => {
+            .map(|mut v| {
                 v.run();
                 v.output()
-            }
-            Err(e) => {
-                let s = format!("{}", e.diagnose(&block.code)).replace("`", "\u{200b}`");
-                ctx.send(|c| {
-                    c.allowed_mentions(|a| a.empty_parse())
-                        .content(format!("```ansi\n{s}\n```"))
-                })
-                .await?;
-                return Ok(());
-            }
+            })
+            .map_err(|e| format!("{}", e.diagnose(&block.code)).replace("`", "\u{200b}`"))
+    })
+    .await?
+    {
+        Ok(o) => o,
+        Err(e) => {
+            ctx.send(|c| {
+                c.allowed_mentions(|a| a.empty_parse())
+                    .content(format!("```ansi\n{e}\n```"))
+            })
+            .await?;
+            return Ok(());
         }
     })
     else {
@@ -44,44 +46,41 @@ pub async fn run(
     };
     let displays: Box<[_; 1]> = displays.try_into().unwrap();
     let [display] = *displays;
+    let display = if display.buffer().iter().any(|&n| n != 0) {
+        Some(
+            tokio::task::spawn_blocking(move || {
+                let p = oxipng::RawImage::new(
+                    display.width(),
+                    display.height(),
+                    oxipng::ColorType::RGBA,
+                    oxipng::BitDepth::Eight,
+                    display.take_buffer(),
+                )
+                .unwrap();
+                p.create_optimized_png(&oxipng::Options::default()).unwrap()
+            })
+            .await?,
+        )
+    } else {
+        None
+    };
 
     ctx.send(|c| {
-        let mut empty = true;
+        if output.is_empty() && display.is_none() {
+            c.content("no output");
+        }
         if !output.is_empty() {
             c.content(format!(
                 "```\n{}\n```",
                 String::from_utf8_lossy(&output).replace('`', "\u{200b}`")
             ));
-            empty = false;
         }
-        if display.buffer().iter().any(|&n| n != 0) {
-            let p = oxipng::RawImage::new(
-                display.width(),
-                display.height(),
-                oxipng::ColorType::RGBA,
-                oxipng::BitDepth::Eight,
-                display.take_buffer(),
-            )
-            .unwrap();
-            let p = p
-                .create_optimized_png(&oxipng::Options {
-                    filter: oxipng::indexset! { oxipng::RowFilter::None },
-                    bit_depth_reduction: false,
-                    color_type_reduction: false,
-                    palette_reduction: false,
-                    grayscale_reduction: false,
-                    ..oxipng::Options::from_preset(0)
-                })
-                .unwrap();
+        if let Some(display) = display {
             c.attachment(AttachmentType::Bytes {
-                data: Cow::from(p),
+                data: Cow::from(display),
                 filename: "display1.png".to_string(),
-            });
-            c.embed(|e| e.attachment("display1.png"));
-            empty = false;
-        }
-        if empty {
-            c.content("no output");
+            })
+            .embed(|e| e.attachment("display1.png"));
         }
         c.allowed_mentions(|a| a.empty_parse())
     })

@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::broadcast::{self, Sender};
-use tokio::sync::{MutexGuard, OnceCell};
+use tokio::sync::{Mutex, MutexGuard, OnceCell};
 pub struct Maps;
 impl Maps {
     pub async fn find(map: &str, stdin: &broadcast::Sender<String>) -> usize {
@@ -78,7 +78,6 @@ impl MapImage {
         stdin: &Sender<String>,
         // returning a guard is questionable
     ) -> Result<(MutexGuard<Vec<u8>>, Option<RenderInfo>)> {
-        let mut lock = self.0.lock().await;
         // me in a million years when its 1901 and we never get a new render
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -90,53 +89,59 @@ impl MapImage {
                 .fetch_update(Relaxed, Relaxed, |then| (now > then + 70).then_some(now))
                 .is_err()
             {
-                (lock, None)
+                (self.0.lock().await, None)
             } else {
                 send!(stdin, "save 0")?;
                 let _ = get_nextblock().await;
 
                 // parsing the thing doesnt negate the need for a env var sooo
                 let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
-                let then = Instant::now();
-                let m = Map::deserialize(&mut mindus::data::DataRead::new(&o))?;
-                let deser_took = then.elapsed();
-                let name = m.tags.get("mapname").unwrap().to_owned();
-                let render_took = Instant::now();
-                let i = m.render();
-                let render_took = render_took.elapsed();
-                let compression_took = Instant::now();
-                let i = RawImage::new(
-                    i.width(),
-                    i.height(),
-                    ColorType::RGB {
-                        transparent_color: None,
-                    },
-                    BitDepth::Eight,
-                    i.take_buffer(),
-                )
-                .unwrap();
-                *lock = i
-                    .create_optimized_png(&oxipng::Options {
-                        filter: indexset! { RowFilter::None },
-                        bit_depth_reduction: false,
-                        color_type_reduction: false,
-                        palette_reduction: false,
-                        grayscale_reduction: false,
-                        ..oxipng::Options::from_preset(0)
-                    })
+                let (i, info) = tokio::task::spawn_blocking(move || {
+                    let then = Instant::now();
+                    let m = Map::deserialize(&mut mindus::data::DataRead::new(&o))?;
+                    let deser_took = then.elapsed();
+                    let name = m.tags.get("mapname").unwrap().to_owned();
+                    let render_took = Instant::now();
+                    let i = m.render();
+                    let render_took = render_took.elapsed();
+                    let compression_took = Instant::now();
+                    let i = RawImage::new(
+                        i.width(),
+                        i.height(),
+                        ColorType::RGB {
+                            transparent_color: None,
+                        },
+                        BitDepth::Eight,
+                        i.take_buffer(),
+                    )
                     .unwrap();
-                let compression_took = compression_took.elapsed();
-                let total = then.elapsed();
-                (
-                    lock,
-                    Some(RenderInfo {
-                        deserialization: deser_took,
-                        render: render_took,
-                        compression: compression_took,
-                        name,
-                        total,
-                    }),
-                )
+                    let i = i
+                        .create_optimized_png(&oxipng::Options {
+                            filter: indexset! { RowFilter::None },
+                            bit_depth_reduction: false,
+                            color_type_reduction: false,
+                            palette_reduction: false,
+                            grayscale_reduction: false,
+                            ..oxipng::Options::from_preset(0)
+                        })
+                        .unwrap();
+                    let compression_took = compression_took.elapsed();
+                    let total = then.elapsed();
+                    anyhow::Ok((
+                        i,
+                        RenderInfo {
+                            deserialization: deser_took,
+                            render: render_took,
+                            compression: compression_took,
+                            name,
+                            total,
+                        },
+                    ))
+                })
+                .await??;
+                let mut lock = self.0.lock().await;
+                *lock = i;
+                (lock, Some(info))
             },
         )
     }

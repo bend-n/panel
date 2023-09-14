@@ -12,7 +12,7 @@ use super::{emojis, strip_colors, SMsg, SUCCESS};
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
 
-async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic<'_>>> {
+async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic>> {
     for a in attchments {
         if a.filename.ends_with("msch") {
             let s = a.download().await?;
@@ -37,8 +37,11 @@ async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic<
 
 pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<Message, ()>> {
     let author = m.author;
-    let send = |v| async move {
-        let p = to_png(&v);
+    let send = |v: Schematic| async move {
+        let d = v.tags.get("description").cloned();
+        let name = strip_colors(v.tags.get("name").unwrap());
+        let cost = v.compute_total_cost().0;
+        let p = tokio::task::spawn_blocking(move || to_png(&v)).await?;
         anyhow::Ok(
             m.channel
                 .send_message(c, |m| {
@@ -48,11 +51,9 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
                     })
                     .embed(|e| {
                         e.attachment("image.png");
-                        if let Some(d) = v.tags.get("description") {
-                            e.description(d);
-                        }
+                        d.map(|v| e.description(v));
                         let mut s = String::new();
-                        for (i, n) in v.compute_total_cost().0.iter() {
+                        for (i, n) in cost.iter() {
                             if n == 0 {
                                 continue;
                             }
@@ -60,7 +61,7 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
                             write!(s, "{} {n} ", emojis::item(i)).unwrap();
                         }
                         e.field("", s, true);
-                        e.title(strip_colors(v.tags.get("name").unwrap()))
+                        e.title(name)
                             .footer(|f| f.text(format!("requested by {author}")))
                             .color(SUCCESS)
                     })
@@ -80,7 +81,7 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
     Ok(ControlFlow::Continue(()))
 }
 
-pub fn to_png(s: &Schematic<'_>) -> Vec<u8> {
+pub fn to_png(s: &Schematic) -> Vec<u8> {
     let p = s.render();
     let p = RawImage::new(
         p.width(),
@@ -92,18 +93,10 @@ pub fn to_png(s: &Schematic<'_>) -> Vec<u8> {
         p.take_buffer(),
     )
     .unwrap();
-    p.create_optimized_png(&oxipng::Options {
-        filter: indexset! { RowFilter::None },
-        bit_depth_reduction: false,
-        color_type_reduction: false,
-        palette_reduction: false,
-        grayscale_reduction: false,
-        ..oxipng::Options::from_preset(0)
-    })
-    .unwrap()
+    p.create_optimized_png(&oxipng::Options::default()).unwrap()
 }
 
-fn from_msg<'l>(msg: &str) -> Result<Schematic<'l>> {
+fn from_msg(msg: &str) -> Result<Schematic> {
     let schem_text = RE
         .captures(msg)
         .ok_or(anyhow!("couldnt find schematic"))?
