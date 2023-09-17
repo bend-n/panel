@@ -16,7 +16,7 @@ pub async fn run(
         ..
     } = (match tokio::task::spawn_blocking(move || {
         Executor::with_output(vec![])
-            .display()
+            .large_display()
             .limit_iterations(
                 kv.get("iters")
                     .map_or(1, |v| v.parse::<usize>().unwrap_or(1).clamp(1, 50)),
