@@ -63,6 +63,15 @@ async fn map_view(
     )
 }
 
+async fn map_file(
+    axum::extract::State(state): axum::extract::State<Arc<State>>,
+) -> impl IntoResponse {
+    (
+        AppendHeaders([(CONTENT_TYPE, "application/octet-stream")]),
+        crate::bot::maps::savefile(&state.stdin).await.unwrap(),
+    )
+}
+
 pub struct Server;
 impl Server {
     pub async fn spawn(addr: SocketAddr) {
@@ -73,6 +82,7 @@ impl Server {
             .route("/plaguess.png", png!(plaguess))
             .route("/favicon.ico", png!(logo32))
             .route("/view", get(map_view))
+            .route("/savefile", get(map_file))
             .with_state(state.clone());
         tokio::spawn(async move {
             AxumServer::bind(&addr)

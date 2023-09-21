@@ -91,11 +91,7 @@ impl MapImage {
             {
                 (self.0.lock().await, None)
             } else {
-                send!(stdin, "save 0")?;
-                let _ = get_nextblock().await;
-
-                // parsing the thing doesnt negate the need for a env var sooo
-                let o = std::fs::read(std::env::var("SAVE_PATH").unwrap())?;
+                let o = savefile(stdin).await?;
                 let (i, info) = tokio::task::spawn_blocking(move || {
                     let then = Instant::now();
                     let m = Map::deserialize(&mut mindus::data::DataRead::new(&o))?;
@@ -166,4 +162,12 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
     })
     .await?;
     Ok(())
+}
+
+pub async fn savefile(s: &Sender<String>) -> Result<Vec<u8>> {
+    send!(s, "save 0")?;
+    let _ = get_nextblock().await;
+
+    // parsing the thing doesnt negate the need for a env var sooo
+    Ok(std::fs::read(std::env::var("SAVE_PATH").unwrap())?)
 }
