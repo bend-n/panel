@@ -1,7 +1,7 @@
 use crate::bot::Bot;
 use crate::process::Process;
 use axum::{
-    http::header::CONTENT_TYPE,
+    http::header::{CONTENT_ENCODING, CONTENT_TYPE},
     response::{AppendHeaders, Html, IntoResponse},
     routing::get,
     Router, Server as AxumServer,
@@ -83,6 +83,28 @@ impl Server {
             .route("/favicon.ico", png!(logo32))
             .route("/view", get(map_view))
             .route("/savefile", get(map_file))
+            .route(
+                "/masm_bg.wasm",
+                get(|| async {
+                    (
+                        AppendHeaders([
+                            (CONTENT_TYPE, "application/wasm"),
+                            (CONTENT_ENCODING, "gzip"),
+                        ]),
+                        include_bytes!("../html-src/masm.wasm"),
+                    )
+                }),
+            )
+            .route(
+                "/masm.js",
+                get(|| async {
+                    (
+                        AppendHeaders([(CONTENT_TYPE, "application/javascript")]),
+                        include_str!("../html-src/masm-bindings.js"),
+                    )
+                }),
+            )
+            .route("/viewer", html!(viewer))
             .with_state(state.clone());
         tokio::spawn(async move {
             AxumServer::bind(&addr)
