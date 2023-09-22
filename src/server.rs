@@ -87,10 +87,10 @@ impl Server {
                 "/masm_bg.wasm",
                 get(|| async {
                     (
-                        AppendHeaders([
+                        [
                             (CONTENT_TYPE, "application/wasm"),
                             (CONTENT_ENCODING, "gzip"),
-                        ]),
+                        ],
                         include_bytes!("../html-src/masm.wasm"),
                     )
                 }),
@@ -99,7 +99,7 @@ impl Server {
                 "/masm.js",
                 get(|| async {
                     (
-                        AppendHeaders([(CONTENT_TYPE, "application/javascript")]),
+                        [(CONTENT_TYPE, "application/javascript")],
                         include_str!("../html-src/masm-bindings.js"),
                     )
                 }),
