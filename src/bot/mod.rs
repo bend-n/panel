@@ -60,7 +60,6 @@ macro_rules! send_ctx {
 pub const SOURCE_GUILD: u64 = 1003092764919091282;
 pub mod emojis {
     use super::SOURCE_GUILD;
-    use mindus::item::Type as Item;
     use poise::serenity_prelude::Emoji;
     use serenity::http::client::Http;
     use std::sync::OnceLock;
@@ -83,31 +82,7 @@ pub mod emojis {
             }
         } };
     }
-    create![
-        ARROW,
-        COPPER,
-        GRAPHITE,
-        LEAD,
-        SILICON,
-        TITANIUM,
-        SAND,
-        COAL,
-        PYRATITE,
-        PLASTANIUM,
-        SCRAP,
-        SPOREPOD,
-        THORIUM,
-        SURGEALLOY,
-        TUNGSTEN,
-        PHASEFABRIC,
-        OXIDE,
-        METAGLASS,
-        FISSILEMATTER,
-        DORMANTCYST,
-        CARBIDE,
-        BLASTCOMPOUND,
-        BERYLLIUM
-    ];
+    create![ARROW,];
 
     macro_rules! get {
         ($e: ident) => {
@@ -115,35 +90,6 @@ pub mod emojis {
         };
     }
     pub(crate) use get;
-
-    pub fn item(i: Item) -> Emoji {
-        use Item::*;
-        // exec() when
-        match i {
-            Copper => get!(COPPER),
-            Lead => get!(LEAD),
-            Metaglass => get!(METAGLASS),
-            Graphite => get!(GRAPHITE),
-            Sand => get!(SAND),
-            Coal => get!(COAL),
-            Titanium => get!(TITANIUM),
-            Thorium => get!(THORIUM),
-            Scrap => get!(SCRAP),
-            Silicon => get!(SILICON),
-            Plastanium => get!(PLASTANIUM),
-            PhaseFabric => get!(PHASEFABRIC),
-            SurgeAlloy => get!(SURGEALLOY),
-            SporePod => get!(SPOREPOD),
-            BlastCompound => get!(BLASTCOMPOUND),
-            Pyratite => get!(PYRATITE),
-            Beryllium => get!(BERYLLIUM),
-            Tungsten => get!(TUNGSTEN),
-            Oxide => get!(OXIDE),
-            Carbide => get!(CARBIDE),
-            FissileMatter => get!(FISSILEMATTER),
-            DormantCyst => get!(DORMANTCYST),
-        }
-    }
 }
 const PFX: &str = ">";
 #[cfg(debug_assertions)]
@@ -187,7 +133,7 @@ pub async fn safe(m: &Message, c: &serenity::client::Context) -> String {
             result = result.replace(&mention, "@deleted-role");
         }
     }
-    result
+    crate::conv::replace(&result)
 }
 
 pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result<()> {

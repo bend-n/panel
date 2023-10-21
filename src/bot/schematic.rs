@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 use std::{borrow::Cow, ops::ControlFlow};
 
-use super::{emojis, strip_colors, SMsg, SUCCESS};
+use super::{strip_colors, SMsg, SUCCESS};
 
 static RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(```)?(\n)?([^`]+)(\n)?(```)?").unwrap());
@@ -38,8 +38,8 @@ async fn from_attachments(attchments: &[Attachment]) -> Result<Option<Schematic>
 pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<Message, ()>> {
     let author = m.author;
     let send = |v: Schematic| async move {
-        let d = v.tags.get("description").cloned();
-        let name = strip_colors(v.tags.get("name").unwrap());
+        let d = v.tags.get("description").map(|t| crate::conv::replace(t));
+        let name = crate::conv::replace(&strip_colors(v.tags.get("name").unwrap()));
         let cost = v.compute_total_cost().0;
         let p = tokio::task::spawn_blocking(move || to_png(&v)).await?;
         anyhow::Ok(
@@ -58,7 +58,7 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
                                 continue;
                             }
                             use std::fmt::Write;
-                            write!(s, "{} {n} ", emojis::item(i)).unwrap();
+                            write!(s, "{} {n} ", crate::conv::item(i)).unwrap();
                         }
                         e.field("", s, true);
                         e.title(name)

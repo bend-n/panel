@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use poise::serenity_prelude::Webhook as RealHook;
 use regex::Regex;
 use serenity::{builder::ExecuteWebhook, http::Http, json};
@@ -130,13 +129,13 @@ fn get(line: &str) -> Option<Message> {
     static HAS_UUID: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"[a-zA-Z0-9+/]{22}==").unwrap());
 
-    if let Some((u, c)) = line.split(": ").map(unify).collect_tuple() {
+    if let Some((u, c)) = line.split_once(": ") {
         let u = u.trim_start_matches('<');
         let c = c.trim_end_matches('>');
         if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c) || HAS_UUID.is_match(u)) {
             return Some(Message::Chat {
-                player: u.to_owned(),
-                content: c.to_owned(),
+                player: unify(u),
+                content: unify(&crate::conv::replace(c)),
             });
         }
     }
