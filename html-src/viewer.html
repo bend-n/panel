@@ -11,11 +11,41 @@
 
         body {
             background-color: #3E3B3B;
+            padding: 0px;
+            margin: 0px;
+        }
+
+        button {
+            border: 4px outset #FBD367;
+            background-color: #3E3B3B96;
+            height: 64px;
+            width: 64px;
+            border-radius: 5px;
+            position: absolute;
+            margin: 5px;
+            cursor: progress;
+            z-index: 1;
+        }
+
+        path {
+            transition: 0.25s cubic-bezier(0.68, -0.55, 0.27, 1.55) all;
         }
     </style>
 </head>
 
 <body>
+    <button onclick="load()"
+        onmouseenter="document.getElementById('circle').style.stroke='#6ecdec'; document.getElementById('arrow').style.fill='#6ecdec';document.getElementById('arrow').style.stroke='#6ecdec'"
+        onmouseleave="document.getElementById('circle').style.stroke='#bf92f9'; document.getElementById('arrow').style.fill='#bf92f9';document.getElementById('arrow').style.stroke='#bf92f9';">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+            <circle cx="31.24" cy="32.384" r="19.844" style="fill:none;fill-rule:evenodd;stroke-width:1.6" />
+            <path id="circle"
+                d="M49.766 38.974c-3.4 8.685-12.593 13.795-21.938 12.195-9.345-1.599-16.228-9.46-16.427-18.761-.199-9.3 6.343-17.438 15.611-19.42 9.268-1.983 18.671 2.745 22.44 11.282"
+                style="fill:none;fill-rule:evenodd;stroke:#bf92f9;stroke-width:10;stroke-linejoin:bevel;stroke-opacity:1" />
+            <path id="arrow" d="m57.104 20.904-4.244 11.48-11.061-4.748Z"
+                style="fill:#bf92f9;fill-opacity:1;fill-rule:evenodd;stroke:#bf92f9;stroke-width:1;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1" />
+        </svg>
+    </button>
     <img id="picture" draggable="false">
     <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
     <script type="module">
@@ -31,13 +61,15 @@
             });
             return base64url.slice(base64url.indexOf(',') + 1)
         }
-        init().then(() => {
-            fetch("http://apricotalliance.org/savefile").then(function (content) {
+        window.load = () => {
+            fetch("/savefile").then(function (content) {
                 content.arrayBuffer().then(function (buf) {
                     let pic = document.getElementById('picture');
                     let imgbuf = render(new Uint8Array(buf));
                     console.log("render done");
                     pic.src = URL.createObjectURL(new Blob([imgbuf]))
+                    if (window.zooming) return;
+                    window.zooming = true;
                     let panzoom = Panzoom(pic, { maxScale: 7, cursor: "grab", noBind: true });
                     panzoom.pan(pic.width / 2, pic.height / 2, { animate: true })
                     panzoom.zoom(1, { animate: true })
@@ -53,7 +85,8 @@
                     pic.addEventListener('wheel', panzoom.zoomWithWheel)
                 })
             })
-        });
+        }
+        init().then(load);
     </script>
 </body>
 
