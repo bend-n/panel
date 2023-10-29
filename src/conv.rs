@@ -1,3 +1,5 @@
+use mindus::block::ratios::Resource;
+use mindus::fluid::Type as Fluid;
 use mindus::item::Type as Item;
 
 static E2E: phf::Map<char, &str> = phf::phf_map! {
@@ -204,7 +206,42 @@ static E2E: phf::Map<char, &str> = phf::phf_map! {
     '' => item(Item::BlastCompound),
     '' => item(Item::Beryllium),
     '' => item(Item::Oxide),
+    '' => fluid(Fluid::Water),
+    '' => fluid(Fluid::Slag),
+    '' => fluid(Fluid::Oil),
+    '' => fluid(Fluid::Cryofluid),
+    '' => fluid(Fluid::Neoplasm),
+    '' => fluid(Fluid::Arkycite),
+    '' => fluid(Fluid::Gallium),
+    '' => fluid(Fluid::Ozone),
+    '' => fluid(Fluid::Hydrogen),
+    '' => fluid(Fluid::Nitrogen),
+    '' => fluid(Fluid::Cyanogen),
 };
+
+pub const fn res(r: Resource) -> &'static str {
+    match r {
+        Resource::Item(i) => item(i),
+        Resource::Fluid(f) => fluid(f),
+    }
+}
+
+pub const fn fluid(f: Fluid) -> &'static str {
+    use Fluid::*;
+    match f {
+        Water => "<:water:1144220582204944434>",
+        Slag => "<:slag:1144220603671396352>",
+        Oil => "<:oil:1144220637448118353>",
+        Cryofluid => "<:cryofluid:1144220686018154599>",
+        Neoplasm => "<:neoplasm:1144220645794791505>",
+        Arkycite => "<:arkycite:1144220710106038383>",
+        Gallium => "<:gallium:1144220668238516264>",
+        Ozone => "<:ozone:1144220628627497091>",
+        Hydrogen => "<:hydrogen:1144220658746798090>",
+        Nitrogen => "<:nitrogen:1144220641160077363>",
+        Cyanogen => "<:cyanogen:1144220681945489408>",
+    }
+}
 
 /// Returns the emoji of a item
 pub const fn item(i: Item) -> &'static str {

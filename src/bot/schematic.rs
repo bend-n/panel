@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Result};
+use mindus::block::ratios::Resource;
 use mindus::data::DataRead;
 use mindus::*;
 use oxipng::*;
 use poise::serenity_prelude::*;
 use regex::Regex;
+use std::fmt::Write;
 use std::sync::LazyLock;
 use std::{borrow::Cow, ops::ControlFlow};
 
@@ -41,6 +43,7 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
         let d = v.tags.get("description").map(|t| crate::conv::replace(t));
         let name = crate::conv::replace(&strip_colors(v.tags.get("name").unwrap()));
         let cost = v.compute_total_cost().0;
+        let rats = v.ratios();
         let p = tokio::task::spawn_blocking(move || to_png(&v)).await?;
         anyhow::Ok(
             m.channel
@@ -57,10 +60,28 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
                             if n == 0 {
                                 continue;
                             }
-                            use std::fmt::Write;
                             write!(s, "{} {n} ", crate::conv::item(i)).unwrap();
                         }
-                        e.field("", s, true);
+                        e.field("req", s, true);
+                        macro_rules! fmt {
+                            ($i:ident) => {{
+                                let mut s = String::new();
+                                for &(i, n) in &*rats.$i {
+                                    let e = crate::conv::res(i);
+                                    if matches!(i, Resource::Item(_)) && n % 10.5 < 0.1 {
+                                        match (n / 10.5).round() as u64 {
+                                            1 => write!(s, "{e} <:titanium_conveyor:1165056617809715210> ").unwrap(),
+                                            n => write!(s, "{e} {n} <:titanium_conveyor:1165056617809715210>'s ").unwrap()
+                                        }
+                                    } else {
+                                        write!(s, "{e} {n}/s ").unwrap();
+                                    }
+                                }
+                                s
+                            }}
+                        }
+                        e.field("in", fmt!(input), true);
+                        e.field("out", fmt!(output), true);
                         e.title(name)
                             .footer(|f| f.text(format!("requested by {author}")))
                             .color(SUCCESS)
