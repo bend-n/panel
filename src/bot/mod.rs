@@ -343,13 +343,13 @@ async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
                 for frame in parsed.frames {
                     if let Some(line) = frame.line
                         && (frame.function.contains("panel")
-                        || frame.function.contains("poise")
-                        || frame.function.contains("serenity")
-                        || frame.function.contains("mindus")
-                        || frame.function.contains("image"))
-                        {
-                            s.push(format!("l{}@{}", line, frame.function));
-                        }
+                            || frame.function.contains("poise")
+                            || frame.function.contains("serenity")
+                            || frame.function.contains("mindus")
+                            || frame.function.contains("image"))
+                    {
+                        s.push(format!("l{}@{}", line, frame.function));
+                    }
                 }
                 s.truncate(15);
                 write!(msg, "trace: ```rs\n{}\n```", s.join("\n")).unwrap();

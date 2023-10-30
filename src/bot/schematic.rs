@@ -80,8 +80,12 @@ pub async fn with(m: SMsg, c: &serenity::client::Context) -> Result<ControlFlow<
                                 s
                             }}
                         }
-                        e.field("in", fmt!(input), true);
-                        e.field("out", fmt!(output), true);
+                        if !rats.input.is_empty() {
+                            e.field("in", fmt!(input), true);
+                        }
+                        if !rats.output.is_empty() {
+                            e.field("out", fmt!(output), true);
+                        }
                         e.title(name)
                             .footer(|f| f.text(format!("requested by {author}")))
                             .color(SUCCESS)
