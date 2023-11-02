@@ -1,6 +1,6 @@
 use super::{Context, Result};
 use crate::bot::player::{self, Players};
-use crate::send_ctx;
+use crate::{return_next, send_ctx};
 
 #[poise::command(
     slash_command,
@@ -21,7 +21,7 @@ pub async fn add(
         .unwrap()
         .unwrap();
     send_ctx!(ctx, "admin add {}", player.uuid)?;
-    Ok(())
+    return_next!(ctx)
 }
 
 #[poise::command(
@@ -43,5 +43,5 @@ pub async fn remove(
         .unwrap()
         .unwrap();
     send_ctx!(ctx, "admin remove {}", player.uuid)?;
-    Ok(())
+    return_next!(ctx)
 }
