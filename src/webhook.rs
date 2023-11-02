@@ -151,6 +151,14 @@ fn get(line: &str) -> Option<Message> {
             Message::Join { player }
         });
     }
+    static KICKAGE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"Kicking connection [0-9]{3}.[0-9]{3}.[0-9]{3}.[0-9]{3} \/ [^;]+; Reason: (.+)")
+            .unwrap()
+    });
+    if KICKAGE.is_match(line) {
+        return None;
+    }
+
     static MAP_LOAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Loading map (.+)").unwrap());
     if let Some(captures) = MAP_LOAD.captures(line) {
         return Some(Message::Load {

@@ -23,7 +23,8 @@ pub async fn add(
         .unwrap();
     send_ctx!(ctx, "ban ip {}", player.ip)?;
     send_ctx!(ctx, "ban id {}", player.uuid)?;
-    return_next!(ctx)
+    ctx.say(format!("banned {}", player.name)).await?;
+    Ok(())
 }
 
 #[poise::command(
@@ -35,7 +36,7 @@ pub async fn add(
 /// kick somebody off the server
 pub async fn kick(
     ctx: Context<'_>,
-    #[description = "player to ban"]
+    #[description = "player to kick"]
     #[autocomplete = "player::autocomplete"]
     player: String,
 ) -> Result<()> {
@@ -45,7 +46,8 @@ pub async fn kick(
         .unwrap()
         .unwrap();
     send_ctx!(ctx, "kick {}", player.uuid)?; // FIXME
-    return_next!(ctx)
+    ctx.say(format!("kicked {}", player.name)).await?;
+    Ok(())
 }
 
 #[poise::command(
