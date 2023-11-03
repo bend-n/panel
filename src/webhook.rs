@@ -122,7 +122,7 @@ fn get(line: &str) -> Option<Message> {
             )+ false
         };
     }
-    if s!(line, [' ', '\t'], "at", "Lost command socket connection") {
+    if s!(line, [' ', '\t'], "at", "Lost command socket connection", "Kicking connection") {
         return None;
     }
 
@@ -150,13 +150,6 @@ fn get(line: &str) -> Option<Message> {
         } else {
             Message::Join { player }
         });
-    }
-    static KICKAGE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"Kicking connection [0-9]{3}.[0-9]{3}.[0-9]{3}.[0-9]{3} \/ [^;]+; Reason: (.+)")
-            .unwrap()
-    });
-    if KICKAGE.is_match(line) {
-        return None;
     }
 
     static MAP_LOAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Loading map (.+)").unwrap());
