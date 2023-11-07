@@ -1,4 +1,3 @@
-use mindus::block::ratios::Resource;
 use mindus::fluid::Type as Fluid;
 use mindus::item::Type as Item;
 
@@ -218,13 +217,6 @@ static E2E: phf::Map<char, &str> = phf::phf_map! {
     '' => fluid(Fluid::Nitrogen),
     '' => fluid(Fluid::Cyanogen),
 };
-
-pub const fn res(r: Resource) -> &'static str {
-    match r {
-        Resource::Item(i) => item(i),
-        Resource::Fluid(f) => fluid(f),
-    }
-}
 
 pub const fn fluid(f: Fluid) -> &'static str {
     use Fluid::*;
