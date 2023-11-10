@@ -21,7 +21,7 @@ pub async fn run(
                 kv.get("iters")
                     .map_or(1, |v| v.parse::<usize>().unwrap_or(1).clamp(1, 50)),
             )
-            .limit_instructions(30000)
+            .limit_instructions(52789849)
             .program(&block.code)
             .map(|mut v| {
                 v.run();

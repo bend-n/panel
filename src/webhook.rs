@@ -31,7 +31,11 @@ impl<'a> Webhook<'a> {
         for<'b> F: FnOnce(&'b mut ExecuteWebhook<'a>) -> &'b mut ExecuteWebhook<'a>,
     {
         let mut execute_webhook = ExecuteWebhook::default();
-        execute_webhook.allowed_mentions(|m| m.empty_parse().roles(vec![1169521140998357002, 1133416252791074877]).users(vec![696196765564534825, 600014432298598400]));
+        execute_webhook.allowed_mentions(|m| {
+            m.empty_parse()
+                .roles(vec![1169521140998357002, 1133416252791074877])
+                .users(vec![696196765564534825, 600014432298598400])
+        });
         block(&mut execute_webhook);
 
         let map = json::hashmap_to_json_map(execute_webhook.0);
@@ -122,7 +126,13 @@ fn get(line: &str) -> Option<Message> {
             )+ false
         };
     }
-    if s!(line, [' ', '\t'], "at", "Lost command socket connection", "Kicking connection") {
+    if s!(
+        line,
+        [' ', '\t'],
+        "at",
+        "Lost command socket connection",
+        "Kicking connection"
+    ) {
         return None;
     }
 
