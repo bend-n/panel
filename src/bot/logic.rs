@@ -45,7 +45,7 @@ pub async fn run(
         unreachable!()
     };
     let displays: Box<[_; 1]> = displays.try_into().unwrap();
-    let [display] = *displays;
+    let [(display, _)] = *displays;
     let display = if display.buffer().iter().any(|&n| n != 0) {
         Some(
             tokio::task::spawn_blocking(move || {
