@@ -2,16 +2,13 @@ mod admin;
 mod bans;
 mod config;
 mod js;
-mod logic;
 pub mod maps;
 mod player;
-mod schematic;
 mod status;
 mod voting;
 
 use crate::webhook::Webhook;
 use anyhow::Result;
-use dashmap::DashMap;
 use maps::Maps;
 
 use poise::serenity_prelude::*;
@@ -19,27 +16,16 @@ use serenity::http::Http;
 use serenity::model::channel::Message;
 use std::fmt::Write;
 use std::fs::read_to_string;
-use std::ops::ControlFlow;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc, OnceLock,
 };
-use std::time::Duration;
 use tokio::sync::broadcast;
 
 #[derive(Debug)]
 pub struct Data {
-    // message -> resp
-    tracker: Arc<DashMap<MessageId, Message>>,
     stdin: broadcast::Sender<String>,
     vote_data: voting::Votes,
-}
-
-pub struct SMsg {
-    author: String,
-    content: String,
-    channel: ChannelId,
-    attachments: Vec<Attachment>,
 }
 
 static SKIPPING: OnceLock<(Arc<AtomicU8>, broadcast::Sender<String>)> = OnceLock::new();
@@ -181,7 +167,6 @@ impl Bot {
                     voting::list(),
                     start(),
                     end(),
-                    logic::run(),
                     help(),
                 ],
                 event_handler: |c, e, _, d| {
@@ -198,63 +183,8 @@ impl Bot {
                                 {
                                     return Ok(());
                                 }
-                                if let ControlFlow::Break(m) = schematic::with(
-                                    SMsg {
-                                        author: new_message
-                                            .author_nick(c)
-                                            .await
-                                            .unwrap_or(new_message.author.name.clone()),
-                                        attachments: new_message.attachments.clone(),
-                                        content: new_message.content.clone(),
-                                        channel: new_message.channel_id,
-                                    },
-                                    c,
-                                )
-                                .await?
-                                {
-                                    d.tracker.insert(new_message.id, m);
-                                    return Ok(());
-                                }
                                 if CHANNEL == new_message.channel_id.0 {
                                     say(c, new_message, d).await?;
-                                }
-                            }
-                            poise::Event::MessageUpdate { event, .. } => {
-                                let MessageUpdateEvent {
-                                    author: Some(author),
-                                    guild_id: Some(guild_id),
-                                    content: Some(content),
-                                    attachments: Some(attachments),
-                                    ..
-                                } = event.clone()
-                                else {
-                                    return Ok(());
-                                };
-                                if let Some((_, r)) = d.tracker.remove(&event.id) {
-                                    r.delete(c).await.unwrap();
-                                    if let ControlFlow::Break(m) = schematic::with(
-                                        SMsg {
-                                            author: author
-                                                .nick_in(c, guild_id)
-                                                .await
-                                                .unwrap_or(author.name.clone()),
-                                            content,
-                                            attachments,
-                                            channel: event.channel_id,
-                                        },
-                                        c,
-                                    )
-                                    .await?
-                                    {
-                                        d.tracker.insert(event.id, m);
-                                    }
-                                }
-                            }
-                            poise::Event::MessageDelete {
-                                deleted_message_id, ..
-                            } => {
-                                if let Some((_, r)) = d.tracker.remove(deleted_message_id) {
-                                    r.delete(c).await.unwrap();
                                 }
                             }
                             _ => {}
@@ -276,30 +206,9 @@ impl Bot {
             .intents(GatewayIntents::all())
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
-                    poise::builtins::register_in_guild(
-                        ctx,
-                        &framework.options().commands[..18],
-                        GuildId(GUILD),
-                    )
-                    .await?;
-                    poise::builtins::register_globally(ctx, &framework.options().commands[18..])
-                        .await?;
+                    poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     println!("registered");
-                    let tracker = Arc::new(DashMap::new());
-                    let tc = Arc::clone(&tracker);
-                    tokio::spawn(async move {
-                        loop {
-                            // every 10 minutes
-                            tokio::time::sleep(Duration::from_secs(60 * 10)).await;
-                            tc.retain(|_, v: &mut Message| {
-                                // prune messagees older than 3 hours
-                                Timestamp::now().unix_timestamp() - v.timestamp.unix_timestamp()
-                                    < 60 * 60 * 3
-                            });
-                        }
-                    });
                     Ok(Data {
-                        tracker,
                         stdin,
                         vote_data: voting::Votes::new(vec![]),
                     })
@@ -462,18 +371,15 @@ pub async fn help(
     #[autocomplete = "poise::builtins::autocomplete_command"]
     command: Option<String>,
 ) -> Result<()> {
-    if in_guild(ctx).await.unwrap() {
-        poise::builtins::help(
-            ctx,
-            command.as_deref(),
-            poise::builtins::HelpConfiguration {
-                extra_text_at_bottom: "Mindustry server management bot",
-                ..Default::default()
-            },
-        )
-        .await?;
-    } else {
-        ctx.say(include_str!("usage.md")).await?;
-    }
+    poise::builtins::help(
+        ctx,
+        command.as_deref(),
+        poise::builtins::HelpConfiguration {
+            extra_text_at_bottom: "Mindustry server management bot",
+            ..Default::default()
+        },
+    )
+    .await?;
+
     Ok(())
 }
