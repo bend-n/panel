@@ -45,6 +45,7 @@ flate2 = { version = "1.0", features = ["cloudflare_zlib"], default-features = f
 strip-ansi-escapes = "0.2.0"
 phf = { version = "0.11.2", features = ["macros"] }
 itertools = "0.11.0"
+emoji = { git = "https://github.com/Apricot-Conservation-Project/emoji" }
 
 [profile.release]
 strip = true

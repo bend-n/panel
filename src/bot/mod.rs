@@ -119,7 +119,7 @@ pub async fn safe(m: &Message, c: &serenity::client::Context) -> String {
             result = result.replace(&mention, "@deleted-role");
         }
     }
-    crate::conv::replace(&result)
+    emoji::mindustry::to_discord(&result)
 }
 
 pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result<()> {

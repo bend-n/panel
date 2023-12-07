@@ -94,7 +94,7 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
                 return e.title("no players online.").color(FAIL);
             }
             e.fields(players.into_iter().map(|p| {
-                let admins = if p.admin { " [A]" } else { "" };
+                let admins = if p.admin { "<:admin:1182128872435749005>" } else { "" };
                 (p.name, admins, true)
             }))
             .description("currently online players.")

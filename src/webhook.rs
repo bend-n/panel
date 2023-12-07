@@ -145,7 +145,7 @@ fn get(line: &str) -> Option<Message> {
         if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c) || HAS_UUID.is_match(u)) {
             return Some(Message::Chat {
                 player: unify(u),
-                content: unify(&crate::conv::replace(c)),
+                content: unify(&emoji::mindustry::to_discord(c)),
             });
         }
     }
