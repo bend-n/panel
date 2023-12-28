@@ -115,6 +115,7 @@ pub enum Message {
     Join { player: String },
     Left { player: String },
     Chat { player: String, content: String },
+    AdminChat { player: String, content: String },
     Load { map: String },
 }
 
@@ -143,6 +144,12 @@ fn get(line: &str) -> Option<Message> {
         let u = u.trim_start_matches('<');
         let c = c.trim_end_matches('>');
         if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c) || HAS_UUID.is_match(u)) {
+            if c.starts_with("/a") {
+                return Some(Message::AdminChat {
+                    player: unify(u),
+                    content: unify(&emoji::mindustry::to_discord(c)),
+                });
+            }
             return Some(Message::Chat {
                 player: unify(u),
                 content: unify(&emoji::mindustry::to_discord(c)),
