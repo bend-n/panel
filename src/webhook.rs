@@ -9,6 +9,8 @@ use std::sync::{
 use tokio::sync::broadcast::{self, error::TryRecvError};
 use tokio::time::{sleep, Duration};
 
+use crate::bot::strip_colors;
+
 pub struct Webhook<'a> {
     pub skipped: broadcast::Sender<String>,
     pub skip: Arc<AtomicU8>,
@@ -33,8 +35,12 @@ impl<'a> Webhook<'a> {
         let mut execute_webhook = ExecuteWebhook::default();
         execute_webhook.allowed_mentions(|m| {
             m.empty_parse()
-                .roles(vec![1169521140998357002, 1133416252791074877])
-                .users(vec![696196765564534825, 600014432298598400])
+                .roles(vec![1110088946374938715, 1133416252791074877])
+                .users(vec![
+                    696196765564534825,
+                    600014432298598400,
+                    1173213085553660034,
+                ])
         });
         block(&mut execute_webhook);
 
@@ -119,6 +125,18 @@ pub enum Message {
     Load { map: String },
 }
 
+fn mention(line: &str) -> String {
+    const MODS: &str = "<@&1133416252791074877>";
+    const ADMINS: &str = "<@&1110088946374938715>";
+    line.replace("@Moderator", MODS)
+        .replace("@mods", MODS)
+        .replace("@Administrator", ADMINS)
+        .replace("@admin", ADMINS)
+        .replace("@bendn", "<@696196765564534825>")
+        .replace("@nile", "<@600014432298598400>")
+        .replace("@proto", "<@1173213085553660034>")
+}
+
 fn get(line: &str) -> Option<Message> {
     macro_rules! s {
         ($line: expr, $($e:expr),+ $(,)?) => {
@@ -146,13 +164,13 @@ fn get(line: &str) -> Option<Message> {
         if !(u.is_empty() || c.is_empty() || HAS_UUID.is_match(c) || HAS_UUID.is_match(u)) {
             if c.starts_with("/a") {
                 return Some(Message::AdminChat {
-                    player: unify(u),
-                    content: unify(&emoji::mindustry::to_discord(c)),
+                    player: u.into(),
+                    content: mindustry_to_discord(c),
                 });
             }
             return Some(Message::Chat {
-                player: unify(u),
-                content: unify(&emoji::mindustry::to_discord(c)),
+                player: u.into(),
+                content: mindustry_to_discord(c),
             });
         }
     }
@@ -161,7 +179,7 @@ fn get(line: &str) -> Option<Message> {
         Regex::new(r"(.+) has (dis)?connected. \[([a-zA-Z0-9+/]{22}==)\]").unwrap()
     });
     if let Some(captures) = JOINAGE.captures(line) {
-        let player = unify(captures.get(1).unwrap().as_str());
+        let player = captures.get(1).unwrap().as_str().into();
         return Some(if captures.get(2).is_some() {
             Message::Left { player }
         } else {
@@ -172,35 +190,20 @@ fn get(line: &str) -> Option<Message> {
     static MAP_LOAD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Loading map (.+)").unwrap());
     if let Some(captures) = MAP_LOAD.captures(line) {
         return Some(Message::Load {
-            map: captures.get(1).unwrap().as_str().to_string(),
+            map: crate::bot::strip_colors(captures.get(1).unwrap().as_str()),
         });
     }
     None
 }
 
+pub fn mindustry_to_discord(s: &str) -> String {
+    strip_colors(&mention(&emoji::mindustry::to_discord(&unify(s))))
+}
+
 pub fn unify(s: &str) -> String {
-    s.chars().filter(|&c| c < 'џ').collect()
-}
-
-trait Madd {
-    fn madd(&mut self, line: String);
-    fn madd_panic(&mut self, line: &str);
-}
-
-// cant impl addassign because no impl for other types because
-impl Madd for Option<String> {
-    fn madd(&mut self, line: String) {
-        match self.take() {
-            Some(x) => *self = Some(x + "\n" + &line),
-            None => *self = Some(line),
-        }
-    }
-    fn madd_panic(&mut self, line: &str) {
-        match self.take() {
-            Some(x) => *self = Some(x + "\n" + line),
-            None => unreachable!(),
-        }
-    }
+    s.chars()
+        .filter(|&c| c < '\u{f80}' || c > '\u{107f}')
+        .collect()
 }
 
 #[test]

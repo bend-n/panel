@@ -12,10 +12,12 @@ use anyhow::Result;
 use maps::Maps;
 
 use poise::serenity_prelude::*;
+use regex::Regex;
 use serenity::http::Http;
 use serenity::model::channel::Message;
 use std::fmt::Write;
 use std::fs::read_to_string;
+use std::sync::LazyLock;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc, OnceLock,
@@ -95,7 +97,7 @@ pub async fn in_guild(ctx: Context<'_>) -> Result<bool> {
     Ok(ctx.guild_id().map_or(false, |i| i.0 == GUILD))
 }
 
-pub async fn safe(m: &Message, c: &serenity::client::Context) -> String {
+pub async fn discord_to_mindustry(m: &Message, c: &serenity::client::Context) -> String {
     let mut result = m.content.clone();
 
     for u in &m.mentions {
@@ -119,7 +121,37 @@ pub async fn safe(m: &Message, c: &serenity::client::Context) -> String {
             result = result.replace(&mention, "@deleted-role");
         }
     }
-    emoji::mindustry::to_discord(&result)
+
+    pub fn parse(x: &[u8]) -> u64 {
+        let mut n = 0;
+        for &b in x {
+            n = n * 10 + (b - b'0') as u64
+        }
+        n
+    }
+
+    static CHANNEL: LazyLock<Regex> = LazyLock::new(|| Regex::new("<#([0-9]+)>").unwrap());
+    let mut new = result.clone();
+    for m in CHANNEL.captures_iter(&result) {
+        new = new.replace(
+            m.get(0).unwrap().as_str(),
+            &[
+                "#",
+                c.http()
+                    .get_channel(parse(m.get(1).unwrap().as_str().as_bytes()))
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .name(),
+            ]
+            .concat(),
+        );
+    }
+
+    static EMOJI: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new("<a?:([a-zA-Z_]+):[0-9]+>").unwrap());
+    EMOJI.replace(&new, ":$1:").into_owned()
 }
 
 pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result<()> {
@@ -127,7 +159,7 @@ pub async fn say(c: &serenity::client::Context, m: &Message, d: &Data) -> Result
         .author_nick(&c.http)
         .await
         .unwrap_or_else(|| m.author.name.replace("ggfenguin", "eris"));
-    for l in safe(m, c).await.lines() {
+    for l in discord_to_mindustry(m, c).await.lines() {
         if send!(
             d.stdin,
             "say [royal] [coral][[[scarlet]{n}[coral]]:[white] {l}"
