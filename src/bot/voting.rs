@@ -69,12 +69,19 @@ pub enum VoteData {
 pub type Votes = Mutex<Vec<VoteData>>;
 
 trait EmbedUtil {
-    fn imageor<S: ToString>(&mut self, img: Option<S>) -> &mut Self;
-    fn set_fields<M: IntoIterator<Item = (S, S)>, S: ToString>(&mut self, fields: M) -> &mut Self;
+    fn imageor<S>(self, img: Option<S>) -> Self
+    where
+        String: From<S>;
+    fn set_fields<M: IntoIterator<Item = (S, S)>, S: ToString>(self, fields: M) -> Self
+    where
+        String: From<S>;
 }
 
 impl EmbedUtil for CreateEmbed {
-    fn imageor<S: ToString>(&mut self, img: Option<S>) -> &mut Self {
+    fn imageor<S: Into<String>>(self, img: Option<S>) -> Self
+    where
+        String: From<S>,
+    {
         if let Some(iuri) = img {
             self.image(iuri)
         } else {
@@ -82,9 +89,12 @@ impl EmbedUtil for CreateEmbed {
         }
     }
 
-    fn set_fields<M: IntoIterator<Item = (S, S)>, S: ToString>(&mut self, fields: M) -> &mut Self {
+    fn set_fields<M: IntoIterator<Item = (S, S)>, S: ToString>(mut self, fields: M) -> Self
+    where
+        String: From<S>,
+    {
         for (k, v) in fields {
-            self.field(k, v, false);
+            self = self.field(k, v, false);
         }
         self
     }
@@ -180,27 +190,29 @@ impl VoteData {
     pub async fn begin(mut self, ctx: Context<'_>) -> Result<Self> {
         self.set_end();
         let o = self.options();
-        let handle = poise::send_reply(ctx, |m| {
-            m.embed(|e| {
-                e.imageor(o.image.as_ref())
-                    .color(SUCCESS)
-                    .title(&o.title)
-                    .description(format!("vote ends {}", self.end_stamp()))
-                    .set_fields(&o.fields)
-            })
-            .components(|c| {
-                c.create_action_row(|r| {
-                    for (n, option) in o.options.iter().enumerate() {
-                        r.create_button(|b| {
-                            b.custom_id(format!("{}{n}", self.id()))
+        let handle = poise::send_reply(
+            ctx,
+            poise::CreateReply::default()
+                .embed(
+                    CreateEmbed::new()
+                        .imageor(o.image.as_ref())
+                        .color(SUCCESS)
+                        .title(&o.title)
+                        .description(format!("vote ends {}", self.end_stamp()))
+                        .set_fields(&o.fields),
+                )
+                .components(vec![CreateActionRow::Buttons(
+                    o.options
+                        .iter()
+                        .enumerate()
+                        .map(|(n, option)| {
+                            CreateButton::new(format!("{}{n}", self.id()))
                                 .label(option)
                                 .style(o.styles[n])
-                        });
-                    }
-                    r
-                })
-            })
-        })
+                        })
+                        .collect(),
+                )]),
+        )
         .await?;
         let msg = handle.into_message().await?;
         self.set_reply(&ctx, msg);
@@ -255,7 +267,7 @@ impl VoteData {
         let ctx_id_len = ctx_id.to_string().len();
         let o = self.options().clone();
         let timestamp = self.end_stamp();
-        while let Some(press) = CollectComponentInteraction::new(ctx)
+        while let Some(press) = ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
             .timeout(dead)
             .await
@@ -276,24 +288,30 @@ impl VoteData {
             };
             self.save_ref(ctx)?;
             let (_m, _) = tokio::join!(
-                press.create_followup_message(ctx, |m| { m.ephemeral(true).content(s) }),
-                press.create_interaction_response(ctx, |c| {
-                    c.kind(InteractionResponseType::UpdateMessage)
-                        .interaction_response_data(|m| {
-                            m.embed(|e| {
-                                for (option, votes) in
-                                    self.summarize(ctx, o.options.len()).iter().enumerate()
-                                {
-                                    e.field(&o.options[option], votes, true);
-                                }
-                                e.imageor(o.image.as_ref())
-                                    .color(SUCCESS)
-                                    .title(&o.title)
-                                    .set_fields(&o.fields)
-                                    .description(format!("vote ends {timestamp}"))
-                            })
+                press.create_followup(
+                    ctx,
+                    CreateInteractionResponseFollowup::default()
+                        .ephemeral(true)
+                        .content(s)
+                ),
+                press.create_response(
+                    ctx,
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new().embed({
+                            let mut e = CreateEmbed::new();
+                            for (option, votes) in
+                                self.summarize(ctx, o.options.len()).iter().enumerate()
+                            {
+                                e = e.field(&o.options[option], votes.to_string(), true);
+                            }
+                            e.imageor(o.image.as_ref())
+                                .color(SUCCESS)
+                                .title(&o.title)
+                                .set_fields(&o.fields)
+                                .description(format!("vote ends {timestamp}"))
                         })
-                })
+                    )
+                )
             );
             // let m = m?;
             // let http = ctx.serenity_context().http.clone();
@@ -313,38 +331,41 @@ impl VoteData {
             let _ = std::fs::remove_file(p);
         }
         self.get_reply(ctx)
-            .edit(ctx, |m| {
-                m.embed(|e| {
-                    for (option, votes) in self
-                        .remove(ctx)
-                        .summarize(ctx, o.options.len())
-                        .iter()
-                        .enumerate()
-                    {
-                        e.field(&o.options[option], votes, true);
-                    }
-                    e.color(DISABLED)
-                        .title(&o.title)
-                        .imageor(o.image.as_ref())
-                        .set_fields(o.fields)
-                        .description(format!("vote ended!"))
-                })
-                .components(|c| {
-                    c.set_action_row({
-                        let mut r = CreateActionRow::default();
-                        for (n, option) in o.options.iter().enumerate() {
-                            r.create_button(|b| {
-                                b.label(option)
+            .edit(
+                ctx,
+                EditMessage::default()
+                    .embed({
+                        let mut e = CreateEmbed::new();
+
+                        for (option, votes) in self
+                            .remove(ctx)
+                            .summarize(ctx, o.options.len())
+                            .iter()
+                            .enumerate()
+                        {
+                            e = e.field(&o.options[option], votes.to_string(), true);
+                        }
+                        e.color(DISABLED)
+                            .title(&o.title)
+                            .imageor(o.image.as_ref())
+                            .set_fields(o.fields)
+                            .description(format!("vote ended!"))
+                    })
+                    .components(vec![CreateActionRow::Buttons(
+                        o.options
+                            .iter()
+                            .enumerate()
+                            .map(|(n, option)| {
+                                CreateButton::new("_")
+                                    .label(option)
                                     .disabled(true)
                                     .style(o.styles[n])
-                                    .custom_id("_")
-                            });
-                        }
-                        r
-                    })
-                })
-            })
+                            })
+                            .collect(),
+                    )]),
+            )
             .await?;
+
         Ok(())
     }
 }
@@ -453,7 +474,7 @@ pub async fn create(
 
 async fn fix(ctx: &Context<'_>, data: BufReader<std::fs::File>) -> Result<()> {
     let mut v: BeforePushVoteData = serde_json::from_reader(data)?;
-    let m = ctx.http().get_message(v.cid.0, v.mid.0).await?;
+    let m = ctx.http().get_message(v.cid, v.mid).await?;
     let end = dbg!(m.timestamp.unix_timestamp()) as u64;
     v.reply = Some(Box::new(m));
     let now = SystemTime::now()
@@ -496,7 +517,11 @@ pub async fn fixall(ctx: Context<'_>) -> Result<()> {
         }
     }
     let msg = format!("fixed {}", futs.len());
-    poise::send_reply(ctx, |m| m.content(msg).ephemeral(true)).await?;
+    poise::send_reply(
+        ctx,
+        poise::CreateReply::default().content(msg).ephemeral(true),
+    )
+    .await?;
     future::join_all(futs).await;
     Ok(())
 }
@@ -569,11 +594,13 @@ pub async fn list(ctx: Context<'_>, #[description = "the vote title"] vote: Stri
             VoteData::After(_) => unreachable!(),
         }
     };
-    poise::send_reply(ctx, |m| {
-        m.allowed_mentions(|x| x.empty_parse()).embed(|e| {
+    poise::send_reply(
+        ctx,
+        poise::CreateReply::default().embed({
+            let mut e = CreateEmbed::default();
             let mut votes: HashMap<usize, Vec<u64>> = HashMap::new();
             for (user, vote) in vd.votes {
-                votes.entry(vote).or_default().push(user.0);
+                votes.entry(vote).or_default().push(user.get());
             }
             for (vote, voters) in votes {
                 let mut s = vec![];
@@ -581,13 +608,13 @@ pub async fn list(ctx: Context<'_>, #[description = "the vote title"] vote: Stri
                 for person in voters {
                     s.push(format!("<@{person}>"));
                 }
-                e.field(&vd.options.options[vote], s.join("\n"), false);
+                e = e.field(&vd.options.options[vote], s.join("\n"), false);
             }
             e.color(SUCCESS)
                 .title(format!("voter list for {vote}"))
-                .footer(|f| f.text("privacy is a illusion"))
-        })
-    })
+                .footer(CreateEmbedFooter::new("privacy is a illusion"))
+        }),
+    )
     .await?;
     Ok(())
 }

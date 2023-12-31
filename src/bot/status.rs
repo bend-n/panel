@@ -2,6 +2,7 @@ use super::{get_nextblock, Context, FAIL, SUCCESS};
 use crate::send_ctx;
 use anyhow::Result;
 use itertools::Itertools;
+use poise::serenity_prelude::*;
 use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 
@@ -58,7 +59,12 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
     send_ctx!(ctx, "status")?;
     macro_rules! fail {
         ($ctx:expr,$fail:expr) => {{
-            poise::send_reply(ctx, |m| m.embed(|e| e.title("server down").color($fail))).await?;
+            poise::send_reply(
+                ctx,
+                poise::CreateReply::default()
+                    .embed(CreateEmbed::new().title("server down").color($fail)),
+            )
+            .await?;
             return Ok(());
         }};
     }
@@ -69,18 +75,20 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
     let Some((tps, mem, pcount)) = parse(&block) else {
         fail!(ctx, FAIL);
     };
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            if pcount > 0 {
-                e.footer(|f| f.text("see /players for player list"));
-            }
-            e.title("server online")
-                .field("tps", tps, true)
+    poise::send_reply(
+        ctx,
+        poise::CreateReply::default().embed(if pcount > 0 {
+            CreateEmbed::new()
+                .title("server online")
+                .field("tps", format!("{tps}"), true)
                 .field("memory use", humanize_bytes(Size::Mb(f64::from(mem))), true)
-                .field("players", pcount, true)
+                .field("players", format!("{pcount}"), true)
                 .color(SUCCESS)
-        })
-    })
+                .footer(CreateEmbedFooter::new("see /players for player list"))
+        } else {
+            CreateEmbed::new().title("no players online").color(FAIL)
+        }),
+    )
     .await?;
     Ok(())
 }

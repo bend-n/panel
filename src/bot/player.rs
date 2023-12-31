@@ -3,6 +3,7 @@ use crate::send;
 use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
+use poise::serenity_prelude::*;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Instant;
@@ -88,23 +89,24 @@ pub async fn autocomplete<'a>(
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer().await;
     let players = Players::get_all(&ctx.data().stdin).await.unwrap().clone();
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            if players.is_empty() {
-                return e.title("no players online.").color(FAIL);
-            }
-            e.fields(players.into_iter().map(|p| {
-                let admins = if p.admin {
-                    "<:admin:1182128872435749005>"
-                } else {
-                    ""
-                };
-                (p.name, admins, true)
-            }))
-            .description("currently online players.")
-            .color(SUCCESS)
-        })
-    })
+    poise::send_reply(
+        ctx,
+        poise::CreateReply::default().embed(if players.is_empty() {
+            CreateEmbed::new().title("no players online.").color(FAIL)
+        } else {
+            CreateEmbed::new()
+                .fields(players.into_iter().map(|p| {
+                    let admins = if p.admin {
+                        "<:admin:1182128872435749005>"
+                    } else {
+                        ""
+                    };
+                    (p.name, admins, true)
+                }))
+                .description("currently online players.")
+                .color(SUCCESS)
+        }),
+    )
     .await?;
     Ok(())
 }

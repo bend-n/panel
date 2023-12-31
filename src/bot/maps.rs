@@ -4,7 +4,6 @@ use futures_util::StreamExt;
 use mindus::*;
 use oxipng::*;
 use poise::serenity_prelude::*;
-use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::broadcast::{self, Sender};
@@ -50,15 +49,12 @@ pub async fn autocomplete<'a>(
 pub async fn list(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
     let maps = Maps::get_all(&ctx.data().stdin).await;
-    poise::send_reply(ctx, |m| {
-        m.embed(|e| {
-            for (k, v) in maps.iter().enumerate() {
-                e.field((k + 1).to_string(), v, true);
-            }
-            e.description("map list.").color(SUCCESS)
-        })
-    })
-    .await?;
+    let mut e = CreateEmbed::default();
+    for (k, v) in maps.iter().enumerate() {
+        e = e.field((k + 1).to_string(), v, true);
+    }
+    e = e.description("map list.").color(SUCCESS);
+    poise::send_reply(ctx, poise::CreateReply::default().embed(e)).await?;
     Ok(())
 }
 
@@ -148,18 +144,30 @@ impl MapImage {
 pub async fn view(ctx: Context<'_>) -> Result<()> {
     let _ = ctx.defer_or_broadcast().await;
     let (i, info) = MAP_IMAGE.get(&ctx.data().stdin).await?;
-    poise::send_reply(ctx, |m| {
-        m.attachment(AttachmentType::Bytes {
-            data: Cow::Borrowed(&i),
-            filename: "0.png".to_string(),
-        })
-        .embed(|e| {
-            if let Some(RenderInfo { deserialization, render, compression, total, name }) = info {
-                e.footer(|f| f.text(format!("render of {name} took: {:.3}s (deser: {}ms, render: {:.3}s, compression: {:.3}s)", total.as_secs_f32(), deserialization.as_millis(), render.as_secs_f32(), compression.as_secs_f32())));
-            }
-            e.attachment("0.png").color(SUCCESS)
-        })
-    })
+    let mut e = CreateEmbed::default();
+    if let Some(RenderInfo {
+        deserialization,
+        render,
+        compression,
+        total,
+        name,
+    }) = info
+    {
+        e = e.footer(CreateEmbedFooter::new(format!(
+            "render of {name} took: {:.3}s (deser: {}ms, render: {:.3}s, compression: {:.3}s)",
+            total.as_secs_f32(),
+            deserialization.as_millis(),
+            render.as_secs_f32(),
+            compression.as_secs_f32()
+        )));
+    }
+    e = e.attachment("0.png").color(SUCCESS);
+    poise::send_reply(
+        ctx,
+        poise::CreateReply::default()
+            .attachment(CreateAttachment::bytes(&**i, "0.png"))
+            .embed(e),
+    )
     .await?;
     Ok(())
 }

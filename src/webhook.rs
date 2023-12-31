@@ -1,6 +1,6 @@
-use poise::serenity_prelude::Webhook as RealHook;
+use poise::serenity_prelude::{Webhook as RealHook, *};
 use regex::Regex;
-use serenity::{builder::ExecuteWebhook, http::Http, json};
+use serenity::{builder::ExecuteWebhook, http::Http};
 use std::convert::AsRef;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
@@ -30,34 +30,25 @@ impl<'a> Webhook<'a> {
 
     async fn send<F>(&self, block: F)
     where
-        for<'b> F: FnOnce(&'b mut ExecuteWebhook<'a>) -> &'b mut ExecuteWebhook<'a>,
+        for<'b> F: FnOnce(ExecuteWebhook) -> ExecuteWebhook,
     {
-        let mut execute_webhook = ExecuteWebhook::default();
-        execute_webhook.allowed_mentions(|m| {
-            m.empty_parse()
+        let execute_webhook = ExecuteWebhook::default().allowed_mentions(
+            CreateAllowedMentions::default()
                 .roles(vec![1110088946374938715, 1133416252791074877])
                 .users(vec![
                     696196765564534825,
                     600014432298598400,
                     1173213085553660034,
-                ])
-        });
-        block(&mut execute_webhook);
-
-        let map = json::hashmap_to_json_map(execute_webhook.0);
+                ]),
+        );
+        let execute_webhook = block(execute_webhook);
         if let Err(e) = self
-            .http
-            .as_ref()
-            .execute_webhook(
-                self.inner.id.0,
-                self.inner.token.as_ref().unwrap(),
-                false,
-                &map,
-            )
+            .inner
+            .execute(self.http, false, execute_webhook.clone())
             .await
         {
-            println!("sending {map:#?} got error {e}.");
-        };
+            println!("sending {execute_webhook:#?} got error {e}.");
+        }
     }
 
     async fn send_message(&self, username: &str, content: &str) {

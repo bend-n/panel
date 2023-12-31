@@ -17,6 +17,7 @@ use serenity::http::Http;
 use serenity::model::channel::Message;
 use std::fmt::Write;
 use std::fs::read_to_string;
+use std::str::FromStr;
 use std::sync::LazyLock;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
@@ -48,8 +49,7 @@ macro_rules! send_ctx {
 pub const SOURCE_GUILD: u64 = 1003092764919091282;
 pub mod emojis {
     use super::SOURCE_GUILD;
-    use poise::serenity_prelude::Emoji;
-    use serenity::http::client::Http;
+    use poise::serenity_prelude::*;
     use std::sync::OnceLock;
 
     macro_rules! create {
@@ -57,7 +57,7 @@ pub mod emojis {
             $(pub static $i: OnceLock<Emoji> = OnceLock::new();)+
 
             pub async fn load(c: &Http) {
-                let all = c.get_emojis(SOURCE_GUILD).await.unwrap();
+                let all = c.get_emojis(SOURCE_GUILD.into()).await.unwrap();
                 for e in all {
                     match e.name.as_str() {
                         $(stringify!([< $i:lower >])=>{let _=$i.get_or_init(||e);},)+
@@ -94,7 +94,7 @@ const FAIL: (u8, u8, u8) = (255, 69, 0);
 const DISABLED: (u8, u8, u8) = (112, 128, 144);
 
 pub async fn in_guild(ctx: Context<'_>) -> Result<bool> {
-    Ok(ctx.guild_id().map_or(false, |i| i.0 == GUILD))
+    Ok(ctx.guild_id().map_or(false, |i| i == GUILD))
 }
 
 pub async fn discord_to_mindustry(m: &Message, c: &serenity::client::Context) -> String {
@@ -103,7 +103,11 @@ pub async fn discord_to_mindustry(m: &Message, c: &serenity::client::Context) ->
     for u in &m.mentions {
         let mut at_distinct = String::with_capacity(33);
         at_distinct.push('@');
-        at_distinct.push_str(&u.nick_in(c, GuildId(GUILD)).await.unwrap_or(u.name.clone()));
+        at_distinct.push_str(
+            &u.nick_in(c, GuildId::new(GUILD))
+                .await
+                .unwrap_or(u.name.clone()),
+        );
 
         let mut m = u.mention().to_string();
         if !result.contains(&m) {
@@ -112,22 +116,19 @@ pub async fn discord_to_mindustry(m: &Message, c: &serenity::client::Context) ->
         result = result.replace(&m, &at_distinct);
     }
 
-    for id in &m.mention_roles {
-        let mention = id.mention().to_string();
+    if let Some(guild_id) = m.guild_id {
+        for id in &m.mention_roles {
+            let mention = id.mention().to_string();
 
-        if let Some(role) = id.to_role_cached(c) {
-            result = result.replace(&mention, &["@", &role.name].concat());
-        } else {
+            if let Some(guild) = <_ as AsRef<Cache>>::as_ref(c).guild(guild_id) {
+                if let Some(role) = guild.roles.get(id) {
+                    result = result.replace(&mention, &format!("@{}", role.name));
+                    continue;
+                }
+            }
+
             result = result.replace(&mention, "@deleted-role");
         }
-    }
-
-    pub fn parse(x: &[u8]) -> u64 {
-        let mut n = 0;
-        for &b in x {
-            n = n * 10 + (b - b'0') as u64
-        }
-        n
     }
 
     static CHANNEL: LazyLock<Regex> = LazyLock::new(|| Regex::new("<#([0-9]+)>").unwrap());
@@ -138,7 +139,7 @@ pub async fn discord_to_mindustry(m: &Message, c: &serenity::client::Context) ->
             &[
                 "#",
                 c.http()
-                    .get_channel(parse(m.get(1).unwrap().as_str().as_bytes()))
+                    .get_channel(ChannelId::from_str(m.get(1).unwrap().as_str()).unwrap())
                     .await
                     .unwrap()
                     .guild()
@@ -178,7 +179,7 @@ impl Bot {
     pub async fn spawn(stdout: broadcast::Receiver<String>, stdin: broadcast::Sender<String>) {
         println!("bot startup");
         let tok = std::env::var("TOKEN").unwrap_or(read_to_string("token").expect("wher token"));
-        let f: poise::FrameworkBuilder<Data, anyhow::Error> = poise::Framework::builder()
+        let f = poise::Framework::<Data, anyhow::Error>::builder()
             .options(poise::FrameworkOptions {
                 commands: vec![
                     raw(),
@@ -204,18 +205,18 @@ impl Bot {
                 event_handler: |c, e, _, d| {
                     Box::pin(async move {
                         match e {
-                            poise::Event::Ready { .. } => {
+                            FullEvent::Ready { .. } => {
                                 println!("bot ready");
                                 emojis::load(&c.http).await;
                             }
-                            poise::Event::Message { new_message } => {
+                            FullEvent::Message { new_message } => {
                                 if new_message.content.starts_with('!')
                                     || new_message.content.starts_with(PFX)
                                     || new_message.author.bot
                                 {
                                     return Ok(());
                                 }
-                                if CHANNEL == new_message.channel_id.0 {
+                                if new_message.channel_id == CHANNEL {
                                     say(c, new_message, d).await?;
                                 }
                             }
@@ -226,16 +227,14 @@ impl Bot {
                 },
                 on_error: |e| Box::pin(on_error(e)),
                 prefix_options: poise::PrefixFrameworkOptions {
-                    edit_tracker: Some(poise::EditTracker::for_timespan(
+                    edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                         std::time::Duration::from_secs(2 * 60),
-                    )),
+                    ))),
                     prefix: Some(PFX.to_string()),
                     ..Default::default()
                 },
                 ..Default::default()
             })
-            .token(tok)
-            .intents(GatewayIntents::all())
             .setup(|ctx, _ready, framework| {
                 Box::pin(async move {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
@@ -246,7 +245,8 @@ impl Bot {
                     })
                     // todo: voting::fixall() auto
                 })
-            });
+            })
+            .build();
         tokio::spawn(async move {
             let http = Http::new("");
             let wh = std::env::var("WEBHOOK")
@@ -255,7 +255,13 @@ impl Bot {
             SKIPPING.get_or_init(|| (wh.skip.clone(), wh.skipped.clone()));
             wh.link(stdout).await;
         });
-        f.run().await.unwrap();
+        ClientBuilder::new(tok, GatewayIntents::all())
+            .framework(f)
+            .await
+            .unwrap()
+            .start()
+            .await
+            .unwrap();
     }
 }
 
@@ -264,7 +270,7 @@ type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 async fn on_error(error: poise::FrameworkError<'_, Data, anyhow::Error>) {
     use poise::FrameworkError::Command;
     match error {
-        Command { error, ctx } => {
+        Command { error, ctx, .. } => {
             let mut msg;
             {
                 let mut chain = error.chain();
@@ -324,7 +330,8 @@ async fn raw(
 macro_rules! return_next {
     ($ctx:expr) => {{
         let line = $crate::bot::get_nextblock().await;
-        $ctx.send(|m| m.content(line)).await?;
+        $ctx.send(poise::CreateReply::default().content(line))
+            .await?;
         return Ok(());
     }};
 }
