@@ -4,6 +4,7 @@ mod config;
 mod js;
 pub mod maps;
 mod player;
+mod rules;
 mod status;
 mod voting;
 
@@ -70,7 +71,7 @@ pub mod emojis {
             }
         } };
     }
-    create![ARROW,];
+    create![ARROW];
 
     macro_rules! get {
         ($e: ident) => {
@@ -198,6 +199,9 @@ impl Bot {
                     voting::create(),
                     voting::fixall(),
                     voting::list(),
+                    rules::list(),
+                    rules::set(),
+                    rules::del(),
                     start(),
                     end(),
                     help(),

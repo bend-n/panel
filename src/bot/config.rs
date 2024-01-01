@@ -4,6 +4,9 @@ use convert_case::{Case, Casing};
 use futures_util::StreamExt;
 
 const ITEMS: &[&str] = &[
+    "desc",
+    "name",
+    "port",
     "autoUpdate",
     "showConnectMessages",
     "enableVotekick",
@@ -12,6 +15,7 @@ const ITEMS: &[&str] = &[
     "strict",
     "antiSpam",
     "interactRateWindow",
+    "interactRateLimit",
     "interactRateKick",
     "messageRateLimit",
     "messageSpamKick",
