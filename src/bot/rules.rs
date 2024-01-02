@@ -1,5 +1,6 @@
-use super::{Context, Result};
+use super::{repl, send, Context, Result};
 use crate::bot::get_nextblock;
+use emoji::named::*;
 use futures_util::StreamExt;
 use poise::serenity_prelude::*;
 use tokio::sync::Mutex;
@@ -183,7 +184,7 @@ rules!(
 // );
 
 pub async fn commit(stdin: &broadcast::Sender<String>) {
-    crate::send!(
+    send!(
         stdin,
         "rules {}",
         serde_json::to_string(&*rules(stdin).await).unwrap()
@@ -195,7 +196,7 @@ pub async fn rules(stdin: &broadcast::Sender<String>) -> tokio::sync::MutexGuard
     static RULES: OnceCell<Mutex<Rules>> = OnceCell::const_new();
     RULES
         .get_or_init(|| async move {
-            crate::send!(stdin, "rules").unwrap();
+            send!(stdin, "rules").unwrap();
             let res = get_nextblock().await;
             Mutex::new(deser_hjson::from_str(&res).unwrap())
         })
@@ -251,7 +252,7 @@ pub async fn set(
 ) -> Result<()> {
     rules(&ctx.data().stdin).await.set(&rule, &value)?;
     commit(&ctx.data().stdin).await;
-    poise::say_reply(ctx, "<:ok:1182120559916625971>").await?;
+    repl!(ctx, "{OK}")?;
     Ok(())
 }
 
@@ -270,15 +271,10 @@ pub async fn del(
     rule: String,
 ) -> Result<()> {
     match rules(&ctx.data().stdin).await.delete(&rule) {
-        Some(true) => poise::say_reply(ctx, "<:ok:1182120559916625971>"),
-        Some(false) => poise::say_reply(
-            ctx,
-            "<:warning:1182119952048726066> rule existed, but already none",
-        ),
-
-        None => poise::say_reply(ctx, "<:cancel:1182128899166064720> invalid rule!"),
-    }
-    .await?;
+        Some(true) => repl!(ctx, "{OK} removed"),
+        Some(false) => repl!(ctx, "{WARNING} rule existed, but already none"),
+        None => repl!(ctx, "{CANCEL} invalid rule!"),
+    }?;
     commit(&ctx.data().stdin).await;
 
     Ok(())

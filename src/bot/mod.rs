@@ -34,19 +34,26 @@ pub struct Data {
 
 static SKIPPING: OnceLock<(Arc<AtomicU8>, broadcast::Sender<String>)> = OnceLock::new();
 
-#[macro_export]
 macro_rules! send {
     ($e:expr, $fmt:literal $(, $args:expr)* $(,)?) => {
         $e.send(format!($fmt $(, $args)*))
     };
 }
+use send;
+macro_rules! repl {
+    ($c:expr, $fmt:literal $(, $args:expr)* $(,)?) => {
+        poise::say_reply($c, format!($fmt $(, $args)*)).await
+    }
+}
+use repl;
 
-#[macro_export]
 macro_rules! send_ctx {
     ($e:expr,$fmt:literal $(, $args:expr)* $(,)?) => {
         $e.data().stdin.send(format!($fmt $(, $args)*))
     };
 }
+use send_ctx;
+
 pub const SOURCE_GUILD: u64 = 1003092764919091282;
 pub mod emojis {
     use super::SOURCE_GUILD;
@@ -330,7 +337,6 @@ async fn raw(
     Ok(())
 }
 
-#[macro_export]
 macro_rules! return_next {
     ($ctx:expr) => {{
         let line = $crate::bot::get_nextblock().await;
@@ -339,6 +345,7 @@ macro_rules! return_next {
         return Ok(());
     }};
 }
+use return_next;
 
 async fn get_nextblock() -> String {
     let (skip_count, skip_send) = SKIPPING.get().unwrap();

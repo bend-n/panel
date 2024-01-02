@@ -2,7 +2,6 @@
 use std::str::FromStr;
 #[macro_use]
 mod logging;
-#[macro_use]
 mod bot;
 mod process;
 mod server;

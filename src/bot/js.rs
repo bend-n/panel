@@ -1,5 +1,4 @@
-use super::{Context, Result};
-use crate::{return_next, send_ctx};
+use super::{return_next, send_ctx, Context, Result};
 use minify_js::{Session, TopLevelMode};
 use regex::Regex;
 use std::sync::LazyLock;

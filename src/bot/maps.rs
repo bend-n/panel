@@ -1,5 +1,4 @@
-use super::{get_nextblock, strip_colors, Context, Result, SUCCESS};
-use crate::send;
+use super::{get_nextblock, send, strip_colors, Context, Result, SUCCESS};
 use futures_util::StreamExt;
 use mindus::*;
 use oxipng::*;

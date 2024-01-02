@@ -1,5 +1,5 @@
+use super::send_ctx;
 use super::{get_nextblock, Context, FAIL, SUCCESS};
-use crate::send_ctx;
 use anyhow::Result;
 use itertools::Itertools;
 use poise::serenity_prelude::*;
@@ -77,17 +77,14 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
     };
     poise::send_reply(
         ctx,
-        poise::CreateReply::default().embed(if pcount > 0 {
+        poise::CreateReply::default().embed(
             CreateEmbed::new()
                 .title("server online")
-                .field("tps", format!("{tps}"), true)
+                .field("tps", tps.to_string(), true)
                 .field("memory use", humanize_bytes(Size::Mb(f64::from(mem))), true)
-                .field("players", format!("{pcount}"), true)
-                .color(SUCCESS)
-                .footer(CreateEmbedFooter::new("see /players for player list"))
-        } else {
-            CreateEmbed::new().title("no players online").color(FAIL)
-        }),
+                .field("players", pcount.to_string(), true)
+                .color(SUCCESS),
+        ),
     )
     .await?;
     Ok(())

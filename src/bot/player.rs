@@ -1,5 +1,4 @@
-use super::{get_nextblock, strip_colors, Context, FAIL, SUCCESS};
-use crate::send;
+use super::{get_nextblock, send, strip_colors, Context, FAIL, SUCCESS};
 use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
@@ -96,11 +95,7 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
         } else {
             CreateEmbed::new()
                 .fields(players.into_iter().map(|p| {
-                    let admins = if p.admin {
-                        "<:admin:1182128872435749005>"
-                    } else {
-                        ""
-                    };
+                    let admins = if p.admin { emoji::named::ADMIN } else { "" };
                     (p.name, admins, true)
                 }))
                 .description("currently online players.")

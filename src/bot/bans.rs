@@ -1,6 +1,5 @@
-use super::{Context, Result};
+use super::{return_next, send_ctx, Context, Result};
 use crate::bot::player::{self, Players};
-use crate::{return_next, send_ctx};
 
 #[poise::command(
     slash_command,
