@@ -198,7 +198,7 @@ pub async fn rules(stdin: &broadcast::Sender<String>) -> tokio::sync::MutexGuard
         .get_or_init(|| async move {
             send!(stdin, "rules").unwrap();
             let res = get_nextblock().await;
-            Mutex::new(deser_hjson::from_str(&res).unwrap())
+            Mutex::new(serde_json::from_str(&res).unwrap())
         })
         .await
         .lock()

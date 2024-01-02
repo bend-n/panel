@@ -6,6 +6,7 @@ pub mod maps;
 mod player;
 mod rules;
 mod status;
+mod trace;
 mod voting;
 
 use crate::webhook::Webhook;
@@ -209,6 +210,7 @@ impl Bot {
                     rules::list(),
                     rules::set(),
                     rules::del(),
+                    trace::trace(),
                     start(),
                     end(),
                     help(),

@@ -1,4 +1,4 @@
-#![feature(lazy_cell, let_chains)]
+#![feature(lazy_cell, let_chains, iter_intersperse)]
 use std::str::FromStr;
 #[macro_use]
 mod logging;
