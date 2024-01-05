@@ -32,7 +32,6 @@ serenity = { version = "0.12", features = [
 poise = { git = "https://github.com/serenity-rs/poise" }
 anyhow = "1.0.75"
 regex = { version = "1.8.4", features = ["std"], default-features = false }
-minify-js = "0.5.6"
 convert_case = "0.6.0"
 parse_duration = "2.1.1"
 serde = "1.0"
@@ -53,9 +52,6 @@ strconv = "0.1.0"
 [profile.release]
 strip = true
 lto = "thin"
-
-[build-dependencies]
-minify-html = "0.11.1"
 
 [profile.dev.package.mindus]
 opt-level = 3
