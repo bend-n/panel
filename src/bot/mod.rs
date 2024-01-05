@@ -2,6 +2,7 @@ mod admin;
 mod bans;
 mod config;
 mod js;
+mod lb;
 pub mod maps;
 mod player;
 mod rules;
@@ -211,6 +212,7 @@ impl Bot {
                     rules::set(),
                     rules::del(),
                     trace::trace(),
+                    lb::lb(),
                     start(),
                     end(),
                     help(),
