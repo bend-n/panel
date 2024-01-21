@@ -42,7 +42,7 @@ pub fn humanize_bytes<T: Into<Size>>(bytes: T) -> String {
         return "0 B".to_string();
     }
 
-    let base = size.log10() / UNIT.log10();
+    let base = size.log(UNIT);
 
     let result = format!("{:.1}", UNIT.powf(base - base.floor()),)
         .trim_end_matches(".0")
@@ -70,7 +70,7 @@ pub async fn command(ctx: Context<'_>) -> Result<()> {
     }
     let block = tokio::select! {
         block = get_nextblock() => block,
-        _ = sleep(Duration::from_secs(5)) => fail!(ctx, FAIL),
+        () = sleep(Duration::from_secs(5)) => fail!(ctx, FAIL),
     };
     let Some((tps, mem, pcount)) = parse(&block) else {
         fail!(ctx, FAIL);

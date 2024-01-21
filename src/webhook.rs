@@ -107,7 +107,7 @@ impl<'a> Webhook<'a> {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Message {
     Join { player: String },
     Left { player: String },
@@ -193,7 +193,7 @@ pub fn mindustry_to_discord(s: &str) -> String {
 
 pub fn unify(s: &str) -> String {
     s.chars()
-        .filter(|&c| c < '\u{f80}' || c > '\u{107f}')
+        .filter(|&c| !('\u{f80}'..='\u{107f}').contains(&c))
         .collect()
 }
 
@@ -254,5 +254,5 @@ fn style() {
 #[test]
 fn test_unify() {
     assert!(unify("grassྱྊၔ") == "grass");
-    assert!(unify("иди к черту") == "иди к черту")
+    assert!(unify("иди к черту") == "иди к черту");
 }

@@ -43,8 +43,7 @@ pub async fn trace(
             .map(|x| x.roles.clone())
             .unwrap_or(vec![])
             .iter()
-            .find(|&&x| x == 1133416252791074877)
-            .is_some(),
+            .any(|&x| x == 1133416252791074877),
         _ => unreachable!(),
     };
     let mut r = poise::CreateReply::default().ephemeral(authorized);

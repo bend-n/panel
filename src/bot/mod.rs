@@ -1,6 +1,7 @@
 mod admin;
 mod bans;
 mod config;
+mod exec;
 mod js;
 mod lb;
 pub mod maps;
@@ -213,6 +214,7 @@ impl Bot {
                     rules::del(),
                     trace::trace(),
                     lb::lb(),
+                    exec::exec(),
                     start(),
                     end(),
                     help(),

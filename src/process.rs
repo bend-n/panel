@@ -59,7 +59,7 @@ impl Process {
                 let string = {
                     let n = tokio::select! {
                         n = self.inner.read(&mut stdout) => n.unwrap(),
-                        _ = sleep(Duration::from_millis(100)) => continue,
+                        () = sleep(Duration::from_millis(100)) => continue,
                     };
                     String::from_utf8_lossy(&strip_ansi_escapes::strip(&stdout[..n])).into_owned()
                 };

@@ -227,8 +227,8 @@ impl VoteData {
             Self::After(y) => {
                 re = ctx.data().vote_data.lock().unwrap();
                 match re.get_mut(y.index).unwrap() {
-                    VoteData::Before(x) => x,
-                    VoteData::After(_) => unreachable!(),
+                    Self::Before(x) => x,
+                    Self::After(_) => unreachable!(),
                 }
             }
         };
@@ -349,7 +349,7 @@ impl VoteData {
                             .title(&o.title)
                             .imageor(o.image.as_ref())
                             .set_fields(o.fields)
-                            .description(format!("vote ended!"))
+                            .description("vote ended!".to_string())
                     })
                     .components(vec![CreateActionRow::Buttons(
                         o.options
@@ -404,7 +404,7 @@ where
         self.as_ref()
             .split('|')
             .map(|s| {
-                use ButtonStyle::*;
+                use ButtonStyle::{Danger, Primary, Secondary, Success};
                 match s.trim().to_lowercase().as_str() {
                     // "blue" => Primary,
                     "gray" => Secondary,

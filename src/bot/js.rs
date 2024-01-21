@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 fn parse_js(from: &str) -> Result<String> {
     static RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"```(js|javascript)?([^`]+)```"#).unwrap());
+        LazyLock::new(|| Regex::new(r"```(js|javascript)?([^`]+)```").unwrap());
     let mat = RE
         .captures(from)
         .ok_or(anyhow::anyhow!(r#"no code found (use \`\`\`js...\`\`\`."#))?;
