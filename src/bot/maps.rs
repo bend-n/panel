@@ -58,7 +58,6 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
 }
 
 pub struct RenderInfo {
-    deserialization: Duration,
     render: Duration,
     compression: Duration,
     total: Duration,
@@ -89,11 +88,14 @@ impl MapImage {
                 let o = savefile(stdin).await?;
                 let (i, info) = tokio::task::spawn_blocking(move || {
                     let then = Instant::now();
-                    let m = Map::deserialize(&mut mindus::data::DataRead::new(&o))?;
-                    let deser_took = then.elapsed();
-                    let name = m.tags.get("mapname").unwrap().to_owned();
+                    let mut m = data::map::MapReader::new(&mut data::DataRead::new(&o))?;
+                    m.header()?;
+                    m.version()?;
+                    let name = m.tags()?["mapname"].to_owned();
+                    m.skip()?;
                     let render_took = Instant::now();
-                    let i = m.render();
+                    let (mut i, sz) = data::renderer::draw_map_single(&mut m)?;
+                    data::renderer::draw_units(&mut m, i.as_mut(), sz)?;
                     let render_took = render_took.elapsed();
                     let compression_took = Instant::now();
                     let i = RawImage::new(
@@ -103,7 +105,7 @@ impl MapImage {
                             transparent_color: None,
                         },
                         BitDepth::Eight,
-                        i.take_buffer(),
+                        i.take_buffer().to_vec(),
                     )
                     .unwrap();
                     let i = i
@@ -121,7 +123,6 @@ impl MapImage {
                     anyhow::Ok((
                         i,
                         RenderInfo {
-                            deserialization: deser_took,
                             render: render_took,
                             compression: compression_took,
                             name,
@@ -145,20 +146,21 @@ pub async fn view(ctx: Context<'_>) -> Result<()> {
     let (i, info) = MAP_IMAGE.get(&ctx.data().stdin).await?;
     let mut e = CreateEmbed::default();
     if let Some(RenderInfo {
-        deserialization,
         render,
         compression,
         total,
         name,
     }) = info
     {
-        e = e.footer(CreateEmbedFooter::new(format!(
-            "render of {name} took: {:.3}s (deser: {}ms, render: {:.3}s, compression: {:.3}s)",
-            total.as_secs_f32(),
-            deserialization.as_millis(),
-            render.as_secs_f32(),
-            compression.as_secs_f32()
-        )));
+        e = e.footer(
+            CreateEmbedFooter::new(format!(
+                "render of {name} took: {:.3}s (render: {:.3}s, compression: {:.3}s)",
+                total.as_secs_f32(),
+                render.as_secs_f32(),
+                compression.as_secs_f32()
+            ))
+            .icon_url(ctx.author().avatar_url().unwrap_or("https://cdn.discordapp.com/avatars/275357149477994498/00ff477b0dad733a39039dbfe4be96e5.webp".to_string())),
+        );
     }
     e = e.attachment("0.png").color(SUCCESS);
     poise::send_reply(

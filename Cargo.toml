@@ -37,7 +37,7 @@ convert_case = "0.6.0"
 parse_duration = "2.1.1"
 serde = "1.0"
 btparse = "0.1.1"
-mindus = { version = "5.0.7", features = [], default-features = false }
+mindus = { version = "5.0.18", features = [], default-features = false }
 oxipng = { git = "https://github.com/shssoichiro/oxipng", branch = "master", default-features = false }
 flate2 = { version = "1.0", features = [
   "cloudflare_zlib",
