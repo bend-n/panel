@@ -28,7 +28,7 @@ impl<'a> Webhook<'a> {
         }
     }
 
-    async fn send<F>(&self, block: F)
+    pub async fn send<F>(&self, block: F)
     where
         for<'b> F: FnOnce(ExecuteWebhook) -> ExecuteWebhook,
     {

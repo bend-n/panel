@@ -75,7 +75,7 @@ async fn map_file(
 pub struct Server;
 impl Server {
     pub async fn spawn(addr: SocketAddr) {
-        let (stdin_tx, stdin) = broadcast::channel(2);
+        let (stdin_tx, stdin) = broadcast::channel(8);
         let state = Arc::new(State::new(stdin_tx));
         let router = Router::new()
             .route("/", html!(index))
