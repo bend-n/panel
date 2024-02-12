@@ -124,8 +124,11 @@ fn mention(line: &str) -> String {
         .replace("@Administrator", ADMINS)
         .replace("@admin", ADMINS)
         .replace("@bendn", "<@696196765564534825>")
+        .replace("@bende", "<@696196765564534825>")
         .replace("@nile", "<@600014432298598400>")
         .replace("@proto", "<@1173213085553660034>")
+        .replace("grief", "<@&1206743548838416455>")
+        .replace("/votekick", "<@&1206743639397630003>")
 }
 
 fn get(line: &str) -> Option<Message> {
