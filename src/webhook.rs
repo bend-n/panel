@@ -34,7 +34,12 @@ impl<'a> Webhook<'a> {
     {
         let execute_webhook = ExecuteWebhook::default().allowed_mentions(
             CreateAllowedMentions::default()
-                .roles(vec![1110088946374938715, 1133416252791074877])
+                .roles(vec![
+                    1110088946374938715,
+                    1133416252791074877,
+                    1206743548838416455,
+                    1206743639397630003,
+                ])
                 .users(vec![
                     696196765564534825,
                     600014432298598400,
