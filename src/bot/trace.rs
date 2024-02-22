@@ -70,19 +70,19 @@ pub async fn trace(
             .field("has joined", found.times_joined.to_string(), true)
             .color(SUCCESS);
         if authorized {
+            let mut ips = found
+                .ips
+                .into_iter()
+                .map(|x| x.to_string())
+                .intersperse("|".to_string())
+                .fold(String::new(), |acc, x| acc + &x);
+            if ips.len() > 1000 {
+                ips = format!("{} … ({} more chars)", &ips[..1000], ips.len() - 1000);
+            }
             e = e
                 .field("uuid", found.id, true)
                 .field("last used ip", found.last_ip.to_string(), true)
-                .field(
-                    "all ips used",
-                    found
-                        .ips
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .intersperse("|".to_string())
-                        .fold(String::new(), |acc, x| acc + &x),
-                    true,
-                );
+                .field("all ips used", ips, true);
         }
         r = r.embed(e);
     }
