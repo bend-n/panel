@@ -14,7 +14,7 @@ mod voting;
 use crate::webhook::Webhook;
 use anyhow::Result;
 use maps::Maps;
-
+use emoji::named::*;
 use poise::serenity_prelude::*;
 use regex::Regex;
 use serenity::http::Http;
@@ -28,6 +28,11 @@ use std::sync::{
     Arc, OnceLock,
 };
 use tokio::sync::broadcast;
+
+pub async fn trusted(c: Context<'_>) -> Result<bool> {
+    let c = c.author_member().await.ok_or(anyhow::anyhow!("dang"))?;
+    Ok(c.user.name == "bendn" || c.roles.contains(&RoleId::new(1110439183190863913)))
+}
 
 #[derive(Debug)]
 pub struct Data {
@@ -398,19 +403,18 @@ pub async fn start(
     return_next!(ctx)
 }
 
-#[poise::command(
-    slash_command,
-    category = "Control",
-    default_member_permissions = "ADMINISTRATOR",
-    required_permissions = "ADMINISTRATOR"
-)]
-/// end the game.
+#[poise::command(slash_command, category = "Control", check = "trusted")]
+/// end the game. (requires trusted)
 pub async fn end(
     ctx: Context<'_>,
     #[description = "the map to go to"]
     #[autocomplete = "maps::autocomplete"]
     map: String,
 ) -> Result<()> {
+    if !maps::has(&map, &ctx).await {
+        repl!(ctx, "{CANCEL} pls pick one of the maps.")?;
+        return Ok(());
+    }
     send_ctx!(
         ctx,
         "gameover {}",

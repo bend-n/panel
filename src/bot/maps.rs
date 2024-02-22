@@ -34,6 +34,13 @@ impl Maps {
     }
 }
 
+pub async fn has(map: &str, ctx: &Context<'_>) -> bool {
+    Maps::get_all(&ctx.data().stdin)
+        .await
+        .iter()
+        .any(|x| map == x)
+}
+
 pub async fn autocomplete<'a>(
     ctx: Context<'a>,
     partial: &'a str,
