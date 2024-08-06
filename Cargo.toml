@@ -57,6 +57,3 @@ lto = "thin"
 
 [profile.dev.package.mindus]
 opt-level = 3
-
-[patch.crates-io]
-serenity = { git = "https://github.com/bend-n/serenity", branch = "opt" }

@@ -49,25 +49,14 @@
     <img id="picture" draggable="false">
     <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
     <script type="module">
-        let begin = []
-        let end = [0, 0]
-        let press = false
-        import init, { render } from "/masm.js";
-        async function base(buffer) {
-            const base64url = await new Promise(r => {
-                const reader = new FileReader()
-                reader.onload = () => r(reader.result)
-                reader.readAsDataURL(new Blob([buffer]))
-            });
-            return base64url.slice(base64url.indexOf(',') + 1)
-        }
+        "use strict"
+        import init, { render_map } from "/masm.js";
         window.load = () => {
             fetch("/savefile").then(function (content) {
                 content.arrayBuffer().then(function (buf) {
                     let pic = document.getElementById('picture');
-                    let imgbuf = render(new Uint8Array(buf));
+                    pic.src = render_map(buf);
                     console.log("render done");
-                    pic.src = URL.createObjectURL(new Blob([imgbuf]))
                     if (window.zooming) return;
                     window.zooming = true;
                     let panzoom = Panzoom(pic, { maxScale: 7, cursor: "grab", noBind: true });
