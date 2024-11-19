@@ -32,7 +32,7 @@ pub async fn lb(
     .unwrap();
     static RE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new("[0-9]: <(.)([0-3])> ([^:]+): ([0-9]+) wins").unwrap());
-    c.reply(emoji::mindustry::to_discord(&RE.replace_all(
+    c.reply(crate::emoji::mindustry::to_discord(&RE.replace_all(
         &get_nextblock().await[14..],
         "<$1$2> $3: $4 wins",
     )))

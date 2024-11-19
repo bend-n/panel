@@ -32,6 +32,8 @@ fn main() -> std::io::Result<()> {
         fs::create_dir("html")?;
     }
 
+    emojib::load();
+
     for path in fs::read_dir("html-src")? {
         process(path.unwrap().path().file_name().unwrap())?;
     }

@@ -1,4 +1,4 @@
-use emoji::named::*;
+use crate::emoji::named::*;
 use regex::Regex;
 use std::{
     sync::{

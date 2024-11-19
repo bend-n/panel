@@ -11,10 +11,10 @@ mod status;
 mod trace;
 mod voting;
 
+use crate::emoji::named::*;
 use crate::webhook::Webhook;
 use anyhow::Result;
 use maps::Maps;
-use emoji::named::*;
 use poise::serenity_prelude::*;
 use regex::Regex;
 use serenity::http::Http;

@@ -196,7 +196,7 @@ fn get(line: &str) -> Option<Message> {
 }
 
 pub fn mindustry_to_discord(s: &str) -> String {
-    strip_colors(&mention(&emoji::mindustry::to_discord(&unify(s))))
+    strip_colors(&mention(&crate::emoji::mindustry::to_discord(&unify(s))))
 }
 
 pub fn unify(s: &str) -> String {

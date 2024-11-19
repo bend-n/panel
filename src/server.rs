@@ -1,7 +1,7 @@
 use crate::bot::Bot;
 use crate::process::Process;
 use axum::{
-    http::header::{CONTENT_ENCODING, CONTENT_TYPE},
+    http::header::*,
     response::{AppendHeaders, Html, IntoResponse},
     routing::get,
     Router, Server as AxumServer,
@@ -90,6 +90,7 @@ impl Server {
                         [
                             (CONTENT_TYPE, "application/wasm"),
                             (CONTENT_ENCODING, "gzip"),
+                            (ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
                         ],
                         include_bytes!("../html-src/masm.wasm"),
                     )
@@ -99,7 +100,10 @@ impl Server {
                 "/masm.js",
                 get(|| async {
                     (
-                        [(CONTENT_TYPE, "application/javascript")],
+                        [
+                            (CONTENT_TYPE, "application/javascript"),
+                            (ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+                        ],
                         include_str!("../html-src/masm-bindings.js"),
                     )
                 }),

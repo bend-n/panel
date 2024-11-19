@@ -1,5 +1,5 @@
 use super::{Context, Result};
-use emoji::named::*;
+use crate::emoji::named::*;
 use poise::serenity_prelude::*;
 use std::process::ExitStatus;
 use tokio::sync::broadcast::{channel, error::TryRecvError as ChannelE};
@@ -41,7 +41,7 @@ pub async fn exec(
             .arg("-c")
             .arg(cc)
             .env("FORCE_COLOR", "1")
-            .current_dir(env!("HOME"))
+            .current_dir("/root")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()

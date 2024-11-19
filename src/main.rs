@@ -1,4 +1,4 @@
-#![feature(lazy_cell, let_chains, iter_intersperse)]
+#![feature(let_chains, iter_intersperse)]
 #![allow(mixed_script_confusables)]
 use std::str::FromStr;
 #[macro_use]
@@ -11,7 +11,7 @@ mod webhook;
 
 use server::*;
 use std::net::SocketAddr;
-
+emojib::the_crate! {}
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     tokio::spawn(alerts::run());

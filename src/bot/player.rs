@@ -95,7 +95,11 @@ pub async fn list(ctx: Context<'_>) -> Result<()> {
         } else {
             CreateEmbed::new()
                 .fields(players.into_iter().map(|p| {
-                    let admins = if p.admin { emoji::named::ADMIN } else { "" };
+                    let admins = if p.admin {
+                        crate::emoji::named::ADMIN
+                    } else {
+                        ""
+                    };
                     (p.name, admins, true)
                 }))
                 .description("currently online players.")

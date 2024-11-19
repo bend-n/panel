@@ -1,6 +1,6 @@
 use super::{repl, send, Context, Result};
 use crate::bot::get_nextblock;
-use emoji::named::*;
+use crate::emoji::named::*;
 use futures_util::StreamExt;
 use poise::serenity_prelude::*;
 use tokio::sync::Mutex;
